@@ -61,7 +61,7 @@ public:
 vector<ClientInfo*> clients;
 
 //the server Id
-string serverID = "V_GROUP_15";
+string serverID = "V_GROUP_15_HLH";
 
 void validateSocket(int sockfd) {
 
@@ -95,13 +95,10 @@ string getReadableTime(){
 void manageBuffer(char* buffer, string &firstWord) {
 
     string str = string(buffer);
-    firstWord = strtok(buffer, " ");
-    str = str.substr(str.find_first_of(" ")+1);
+    char delimit[] = " ,";
+    firstWord = strtok(buffer, delimit);
+    str = str.substr(str.find_first_of(delimit)+1);
     strcpy(buffer, str.c_str());
-
-    //tests
-   // cout << firstWord << endl;
-   // cout << buffer << endl;
 }
 
 ///opens the given port on the given socket.
@@ -116,17 +113,17 @@ void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
     }
 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_addr.s_addr = /*inet_addr("127.0.0.1");//*/INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
     // Attempt to bind the socket to the host (portno) the server is currently running on
-    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+    if (::bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
         cerr << "Error on binding" << endl;
         exit(0);
     }
 
     cout << "ip is " << inet_ntoa(serv_addr.sin_addr) << endl;
-    cout << "port is" << serv_addr.sin_port << endl;
+    cout << "port is " << serv_addr.sin_port << endl;
 }
 
 ///manages the knockingClients vector based on information given.
@@ -257,10 +254,23 @@ void leave(ClientInfo* user, char* buffer){
 void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     string command;
     string name;
+    string ip1;
+    string ip2;
+    string srvcmd;
 
     // get the command
     manageBuffer(buffer, command);
 
+    if (command == "CMD") {
+        cout << "Command is " << command << endl;
+        manageBuffer(buffer, ip1);
+        cout << "First parameter: " << ip1 << endl;
+        manageBuffer(buffer, ip2);
+        cout << "Second parameter: " << ip2 << endl;
+        manageBuffer(buffer, srvcmd);
+        cout << "Command: " << srvcmd << endl;
+    }
+    
     if (command == "CONNECT" && user->isUser) {
         //set the username
         user->userName = string(buffer);
@@ -454,7 +464,7 @@ int main(int argc, char* argv[]){
     struct sockaddr_in serv_addr, cli_addr;
     socklen_t cli_addrlen, serv_addrlen;
 
-    cout << serverID << endl;
+    cout << "The server ID is: " << serverID << endl;
 
     //the message buffer
     char message[1000];
@@ -576,14 +586,18 @@ int main(int argc, char* argv[]){
 
             clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr)));
 
+
             cout << "sending message" << endl;
             strcpy(message, "CMD,,V_GROUP_15,ID");
+
             send(newSock, message, strlen(message), 0);
 
             /*else{
                 close(newSock);
             }*/
         }
+
+        //if something happens on any other socket, it's probably a message
 
         else if(FD_ISSET(UDPsock, &masterFD)){
 
@@ -594,7 +608,6 @@ int main(int argc, char* argv[]){
             }
         }
 
-        //if something happens on any other socket, it's propably a message
         for(int i = 0 ; i < (int)clients.size() ; i++){
             socketVal = clients[i]->socketVal;
 
@@ -603,6 +616,7 @@ int main(int argc, char* argv[]){
                 messageCheck = read(socketVal, message, sizeof(message));
                 message[messageCheck] = '\0';
                 if(messageCheck != 0){
+                    cout << message << endl;
                     handleConnection(message, messageCheck, clients[i]);
                 }
 

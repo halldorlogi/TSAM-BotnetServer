@@ -36,7 +36,7 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
         server->h_length);
 
     serv_addr.sin_port = htons(portno);
-	char* loginCommand;
+    char loginCommand[27];
 	strcpy(loginCommand, "V_GROUP_15_I_am_your_father");
 
     // Attempt a connection to the socket.
@@ -69,7 +69,8 @@ bool validateCommand(string input){
 int main(int argc, char *argv[]) {
 
     // ** INITIALIZING VARIABLES **//
-    int knock1, knock2, sockfd;
+    //int knock1, knock2,
+    int sockfd;
     string address;
     struct sockaddr_in serv_addr;           // Socket address structure
     struct hostent *server;
@@ -80,7 +81,7 @@ int main(int argc, char *argv[]) {
     fd_set masterFD, readFD;
 
     // ** SETTING ADDRESS TO LOCALHOST ** //
-    address = "localhost";
+    address = "skel.ru.is";
     const char *addr = address.c_str();
 
     server = gethostbyname(addr);
@@ -98,7 +99,8 @@ int main(int argc, char *argv[]) {
       //  close(knock1);
         //if(knockOnPort(serv_addr, server, 33746, knock2, addr)){
           //  close(knock2);
-            if(knockOnPort(serv_addr, server, 4010, sockfd, addr)){
+  
+            if(knockOnPort(serv_addr, server, 4023, sockfd, addr)){
 
                 cout << sockfd << endl;
 
