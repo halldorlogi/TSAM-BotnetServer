@@ -387,8 +387,8 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     }
 }
 
-//Function to check if the two token characters are in the beginning and end of the buffer
-char checkTokens(char* buffer) {
+//Function to check if the two token characters are in the beginning and end of the buffer, returns a string with the buffer content
+string checkTokens(char* buffer) {
     string str = string(buffer);
 
     int sstr = str.size();
@@ -403,8 +403,9 @@ char checkTokens(char* buffer) {
         return "Tokens not valid";
     }
 
-    return str.c_str();
+    return str;
 }
+
 
 int main(){
 ///####################### VARIABLE INITIALIZATION #######################
