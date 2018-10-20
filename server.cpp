@@ -405,6 +405,7 @@ string listServersReply(string localip, string tcp, string udp){
     return str;
 }
 
+
 void sendUDPmessage(int portno, char* buffer){
 
     struct sockaddr_in cli_addr;
@@ -422,6 +423,29 @@ void sendUDPmessage(int portno, char* buffer){
     sendto(udpSocket, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, clilen);
     close(udpSocket);
 }
+
+
+
+//Function to check if the two token characters are in the beginning and end of the buffer, returns a string with the buffer content
+string checkTokens(char* buffer) {
+    string str = string(buffer);
+
+    int sstr = str.size();
+
+    if(str.find("01") == 0 && str.find("04") == sstr - 2)
+    {
+        str.erase(0,2);
+        str.erase(str.end() - 2, str.end());
+    }
+    else
+    {
+        return "Tokens not valid";
+    }
+
+    return str;
+}
+
+
 
 int main(int argc, char* argv[]){
 ///####################### VARIABLE INITIALIZATION #######################
