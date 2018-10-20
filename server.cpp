@@ -18,7 +18,6 @@
 #include <ctime>
 #include <sstream>
 
-#define MAIN_PORT 4000
 #define MAX_TIME_INTERVAL 120
 using namespace std;
 
@@ -26,9 +25,10 @@ using namespace std;
 ///A class that holds information about a client
 class ClientInfo{
 public:
-    int socketVal, udpPort;
+    int socketVal, udpPort, tcpPort;
     string peerName;
     string userName;
+    string listServerReply;
     bool hasUsername;
     bool isUser;
 
@@ -385,19 +385,57 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
             }
         }
     }
+    else if (command == "LISTSERVERS"){
+        ///TODO senda lista af okkar tengingum UDP port usersins
+    }
 }
 
-int main(){
+string listServersReply(string localip, string tcp, string udp){
+    string str = serverID + "," + localip + "," + tcp + "," + udp + ";";
+
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+        ClientInfo* c = clients[i];
+        if(!(c->isUser)){
+            if(c->hasUsername){
+                str += c->userName;
+            }
+            str += "," + c->peerName + "," + to_string(c->tcpPort) + "," + to_string(c->udpPort) + ";";
+        }
+    }
+    return str;
+}
+
+void sendUDPmessage(int portno, char* buffer){
+
+    struct sockaddr_in cli_addr;
+    socklen_t clilen = sizeof(cli_addr);
+
+    int udpSocket;
+    if((udpSocket=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
+		perror("failed to make udp socket");
+		exit(0);
+    }
+    memset((char *) &cli_addr, 0, sizeof(cli_addr));
+    cli_addr.sin_family = AF_INET;
+    cli_addr.sin_port = htons(portno);
+
+    sendto(udpSocket, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, clilen);
+    close(udpSocket);
+}
+
+int main(int argc, char* argv[]){
 ///####################### VARIABLE INITIALIZATION #######################
 
-    int listeningSock, newSock, messageCheck, socketVal, maxSocketVal;
+    int listeningSock, UDPsock, newSock, messageCheck, socketVal, maxSocketVal;
     struct sockaddr_in serv_addr, cli_addr;
-    socklen_t cli_addrlen;
+    socklen_t cli_addrlen, serv_addrlen;
 
     cout << serverID << endl;
 
     //the message buffer
     char message[1000];
+    char UDPbuffer[1000];
+    char localip[80];
 
     // a set of file descriptors
     fd_set masterFD;
@@ -411,13 +449,17 @@ int main(){
     validateSocket(knockSock2);*/
     listeningSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     validateSocket(listeningSock);
+    UDPsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    validateSocket(UDPsock);
+
 
     //socket settings
     bzero((char*)&serv_addr, sizeof(serv_addr));
 
     //openPort(serv_addr, knockSock1, KNOCK_PORT_1);
     //openPort(serv_addr, knockSock2, KNOCK_PORT_2);
-    openPort(serv_addr, listeningSock, MAIN_PORT);
+    openPort(serv_addr, listeningSock, atoi(argv[1]));
+    openPort(serv_addr, UDPsock, atoi(argv[2]));
 
     //listen for activity
    // listen(knockSock1, 5);
@@ -425,7 +467,37 @@ int main(){
     listen(listeningSock, 5);
 
     cli_addrlen = sizeof(cli_addr);
+    serv_addrlen = sizeof(serv_addr);
 
+    inet_ntop(AF_INET, &serv_addr.sin_addr, localip, 80);
+
+
+///#################### Reyna að tengjast við instructor server ####################
+
+    int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct hostent *server = gethostbyname("10.4.0.164");
+
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+
+    bcopy((char *) server->h_addr,
+        (char *) &serv_addr.sin_addr.s_addr,
+        server->h_length);
+
+    serv_addr.sin_port = htons(4023);
+    if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
+        cout << "connection to " << server->h_name << " successful" << endl;
+
+        strcpy(message, "CMD,,V_GROUP_15,ID");
+            send(instructorsock, message, strlen(message), 0);
+
+        strcpy(UDPbuffer, "V_GROUP_15,");
+        strcat(UDPbuffer, server->h_name);
+        strcat(UDPbuffer, ",4010,4011;");
+
+        //sendUDPmessage(4001, UDPbuffer);
+    }
 
 ///##################### RUNNING BODY OF SERVER ######################
     while(true){
@@ -446,6 +518,7 @@ int main(){
         //FD_SET(knockSock1, &masterFD);
         //FD_SET(knockSock2, &masterFD);
         FD_SET(listeningSock, &masterFD);
+        FD_SET(UDPsock, &masterFD);
 
         maxSocketVal = listeningSock;
 
@@ -476,15 +549,25 @@ int main(){
             newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
             validateSocket(newSock);
             getpeername(newSock, (struct sockaddr * )&cli_addr, (socklen_t *)&cli_addrlen);
+
             clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr)));
 
             cout << "sending message" << endl;
-            strcpy(message, "You are now connected to V_GROUP_15\n");
+            strcpy(message, "CMD,,V_GROUP_15,ID");
             send(newSock, message, strlen(message), 0);
 
             /*else{
                 close(newSock);
             }*/
+        }
+
+        else if(FD_ISSET(UDPsock, &masterFD)){
+
+            bzero(UDPbuffer, sizeof(UDPbuffer));
+            if(recvfrom(UDPsock, (char *)UDPbuffer, sizeof(UDPbuffer), 0, (struct sockaddr *) &serv_addr, &serv_addrlen) != 0){
+                ///TODO tjekka tokens og parsa eftir kommum.
+                cout << UDPbuffer << endl;
+            }
         }
 
         //if something happens on any other socket, it's propably a message
