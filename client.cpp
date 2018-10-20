@@ -99,6 +99,7 @@ int main(int argc, char *argv[]) {
       //  close(knock1);
         //if(knockOnPort(serv_addr, server, 33746, knock2, addr)){
           //  close(knock2);
+  
             if(knockOnPort(serv_addr, server, 4023, sockfd, addr)){
 
                 cout << sockfd << endl;
