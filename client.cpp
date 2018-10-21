@@ -45,7 +45,8 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
         cout << "Port: " << portno << " CLOSED" << endl;
         return false;
     }
-	send(sockfd, loginCommand, strlen(loginCommand), 0);
+    //cout << "Sending loginCommand to server: " << loginCommand << endl;
+	//send(sockfd, loginCommand, strlen(loginCommand), 0);
     return true;
 }
 
@@ -81,7 +82,7 @@ int main(int argc, char *argv[]) {
     fd_set masterFD, readFD;
 
     // ** SETTING ADDRESS TO LOCALHOST ** //
-    address = "skel.ru.is";
+    address = "localhost";
     const char *addr = address.c_str();
 
     server = gethostbyname(addr);
@@ -127,6 +128,7 @@ int main(int argc, char *argv[]) {
                         bzero(buffer, 1000);
                             int bytesRecv = recv(sockfd, buffer, 1000, 0);
                             if(bytesRecv > 0){
+                                cout << "Message received from server: ";
                             cout << string(buffer, 0, bytesRecv) << endl;
                         }
                     }
