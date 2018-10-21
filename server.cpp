@@ -21,26 +21,7 @@
 #define MAX_TIME_INTERVAL 120
 using namespace std;
 
-void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
-    int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
-    struct hostent *server = gethostbyname(address.c_str());
-    
-    char message[1000];
-    
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
 
-    bcopy((char *) server->h_addr,
-          (char *) &serv_addr.sin_addr.s_addr,
-          server->h_length);
-
-    serv_addr.sin_port = htons(portno);
-    if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
-        cout << "connection to " << server->h_name << " successful" << endl;
-        strcpy(message, "CMD,,V_GROUP_15,ID");
-        send(instructorsock, message, strlen(message), 0);
-    }
-}
 
 ///A class that holds information about a client
 class ClientInfo{
@@ -82,6 +63,30 @@ vector<ClientInfo*> clients;
 
 //the server Id
 string serverID = "V_GROUP_15_HLH";
+
+void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
+    int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
+    struct hostent *server = gethostbyname(address.c_str());
+
+    char message[1000];
+
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+
+    bcopy((char *) server->h_addr,
+          (char *) &serv_addr.sin_addr.s_addr,
+          server->h_length);
+
+    serv_addr.sin_port = htons(portno);
+    if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
+        cout << "connection to " << server->h_name << " successful" << endl;
+        strcpy(message, "CMD,,V_GROUP_15,ID");
+        send(instructorsock, message, strlen(message), 0);
+        clients.push_back(new ClientInfo(instructorsock, server->h_name));
+        clients[clients.end()]->tcpPort = portno;
+    }
+}
+
 
 void validateSocket(int sockfd) {
 
@@ -282,7 +287,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
 
     // get the command
     manageBuffer(buffer, command);
-    
+
     if (command == "connectTo") {
         manageBuffer(buffer, address);
         manageBuffer(buffer, port);
@@ -299,33 +304,29 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
             // ### FIRST CASE: CMD, ,GROUP_ID,<COMMAND> ###
             // ### SECOND CASE: CMD,,GROUP_ID<COMMAND> ###
             // ÞARF MÖGULEGA AÐ LAGA - VILJUM GETA VITAÐ HVORT ER HVAÐ
-            if (toServerID == " " || toServerID == fromServerID) {
+            if (toServerID == " " || toServerID == fromServerID) {
                 cout << fromServerID << " has requested to connect" << endl;
                 cout << "Sending RSP..." << endl;
                 bzero(buffer, strlen(buffer));
                 strcpy(buffer, "RSP, ,");
                 strcat(buffer, serverID.c_str());
-                strcat(buffer, ",We are now connected!");
+                strcat(buffer, ",");
+                strcat(buffer, serverID.c_str());
                 send(user->socketVal, buffer, strlen(buffer), 0);
             }
         }
-        if (srvcmd == "connectTo") {
-            struct sockaddr_in serv_addr;
-            bzero((char*)&serv_addr, sizeof(serv_addr));
-            connectToServer(serv_addr, toServerID, stoi(fromServerID));
-        }
     }
-    
+
     if (command == "RSP") {
-        
+
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
         cout << "Response received: " << srvcmd << endl;
         cout << "Adding " << fromServerID << " to network" << endl;
-        
+
     }
-    
+
     if (command == "CONNECT") {
         //set the username
         user->userName = string(buffer);
