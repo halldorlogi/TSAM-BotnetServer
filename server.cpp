@@ -18,15 +18,13 @@
 #include <ctime>
 #include <sstream>
 
-#define MAX_TIME_INTERVAL 120
+#define MAX_TIME_INTERVAL 180
 using namespace std;
-
-
 
 ///A class that holds information about a client
 class ClientInfo{
 public:
-    int socketVal, udpPort, tcpPort;
+    int socketVal, udpPort, tcpPort, lastRcvKA;
     string peerName;
     string userName;
     string listServerReply;
@@ -40,16 +38,17 @@ public:
         peerName = "";
         userName = "";
         this->socketVal = socketVal;
+        lastRcvKA = 0;
     }
 
-    ClientInfo(int socketVal, string peerName){
+    ClientInfo(int socketVal, string peerName, int time){
         hasUsername = false;
         isUser = false;
         this->peerName = peerName;
         userName = "";
         this->socketVal = socketVal;
+        lastRcvKA = time;
     }
-
 
     ~ClientInfo(){
 
@@ -63,6 +62,14 @@ vector<ClientInfo*> clients;
 
 //the server Id
 string serverID = "V_GROUP_15_HLH";
+
+///Get the amount of milliseconds elapsed since 00:00 Jan 1 1970 (I think)
+int getTime(){
+    int t = (int)time(0);
+    return t;
+}
+
+int stillAliveTime = getTime();
 
 void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
     int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
@@ -80,13 +87,13 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
     serv_addr.sin_port = htons(portno);
     if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
         cout << "connection to " << server->h_name << " successful" << endl;
-        strcpy(message, "CMD,,V_GROUP_15,ID");
+        strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
         send(instructorsock, message, strlen(message), 0);
-        clients.push_back(new ClientInfo(instructorsock, server->h_name));
-        clients[clients.end()]->tcpPort = portno;
+        int time = getTime();
+        clients.push_back(new ClientInfo(instructorsock, server->h_name, time));
+        clients[clients.size()-1]->tcpPort = portno;
     }
 }
-
 
 void validateSocket(int sockfd) {
 
@@ -95,13 +102,6 @@ void validateSocket(int sockfd) {
         exit(0);
     }
 }
-
-///Get the amount of milliseconds elapsed since 00:00 Jan 1 1970 (I think)
-int getTime(){
-    int t = (int)time(0);
-    return t;
-}
-
 
 ///Get a timestamp that's readable (taken from cplusplus.com)
 string getReadableTime(){
@@ -151,94 +151,6 @@ void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
     cout << "port is " << serv_addr.sin_port << endl;
 }
 
-///manages the knockingClients vector based on information given.
-/*void vectorManagement(string peerName, int portno, int t){
-    //if this is the port, then he is starting the sequence and we add him into the vector.
-    if(portno == KNOCK_PORT_1){
-        int i = 0;
-        if(knockingClients.size() > 0){
-            i = (int)knockingClients.size() - 1;
-        }
-        knockingClients.push_back(new ClientInfo(peerName));
-        knockingClients[i]->knock1 = true;
-        knockingClients[i]->timeOfKnock1 = t;
-    }
-    //if this is the port, he is attempting to continue the sequence.
-    else if(portno == KNOCK_PORT_2){
-        for(int i = 0 ; i < (int)knockingClients.size() ; i++){
-            if(knockingClients[i]->peerName == peerName){
-                knockingClients[i]->knock2 = true;
-                knockingClients[i]->timeOfKnock2 = t;
-            }
-        }
-    }
-}
-
-///checks who is knocking on a port, calls vectorManager to store information about who knocks on what port and when
-void checkWhoIsKnocking(struct sockaddr_in &cli_addr, int sockfd, int portno, socklen_t len){
-    //accept the connection
-    cout << "knock knock " << portno << endl;
-    int knockerSock = accept(sockfd, (struct sockaddr *)&cli_addr, &len);
-    validateSocket(knockerSock);
-    //see who it is
-    getpeername(knockerSock, (struct sockaddr * )&cli_addr, &len);
-    string peerName = inet_ntoa(cli_addr.sin_addr);
-    cout << peerName << endl;
-    int t = getTime();
-
-    //close the connection
-    close(knockerSock);
-    vectorManagement(peerName, portno, t);
-}*/
-
-///similar to checkWhoIsKnocking but specifically for the listening port. Does not close the socket
-/*int checkIfThisPeerIsAllowed(struct sockaddr_in &cli_addr, int sockfd, socklen_t len){
-    //see who it is
-    getpeername(sockfd, (struct sockaddr * )&cli_addr, &len);
-    string peerName = inet_ntoa(cli_addr.sin_addr);
-    int t = getTime();
-    //if they have knocked on KNOCK_PORT_2 and less than 1200000ms have passed, they get in.
-    for(int i = 0 ; i < (int)knockingClients.size() ; i++){
-        //find the right client in the vector
-        if(knockingClients[i]->peerName == peerName){
-            //check the time
-            if(knockingClients[i]->knock2 && t - knockingClients[i]->timeOfKnock1 < MAX_TIME_INTERVAL){
-                //save this socket
-                knockingClients[i]->socketVal = sockfd;
-                //add this client to the allowedClients vector and erase him from the knockingClients vector
-                allowedClients.push_back(knockingClients[i]);
-                knockingClients.erase(knockingClients.begin() + i);
-
-                //test
-                //cout << allowedClients[0]->peerName << endl;
-                return 1;
-            }
-        }
-    }
-    return 0;
-}*/
-/*
-///Generates a new serverID using the fortune command, a timestamp and the initials of this group (HAH)
-string newID(){
-    string str;
-    string line;
-
-    //call the fortune command and save the output into a txt file
-    system("fortune -s > ServerID.txt");
-    ifstream idFile("ServerID.txt");
-
-    //read the txt file
-    while(!idFile.eof()){
-        getline(idFile, line);
-        str += line;
-    }
-
-    //add the timestamp and initials
-    str += "\n" + getReadableTime() + "\nHAH";
-    idFile.close();
-    return str;
-}
-*/
 ///Sends the buffer to all connected clients (except the original sender if alsoSendToSender is false)
 void sendBufferToAll(ClientInfo* user, char* buffer, bool alsoSendToSender){
     buffer[strlen(buffer)] = '\0';
@@ -308,12 +220,17 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
                 cout << fromServerID << " has requested to connect" << endl;
                 cout << "Sending RSP..." << endl;
                 bzero(buffer, strlen(buffer));
-                strcpy(buffer, "RSP, ,");
+                strcpy(buffer, "RSP,");
+                strcat(buffer, fromServerID.c_str());
+                strcat(buffer, ",");
                 strcat(buffer, serverID.c_str());
                 strcat(buffer, ",");
                 strcat(buffer, serverID.c_str());
                 send(user->socketVal, buffer, strlen(buffer), 0);
             }
+        }
+        if (srvcmd == "KEEPALIVE") {
+            user->lastRcvKA = getTime();
         }
     }
 
@@ -373,10 +290,14 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         for (int i = 0; i < (int)clients.size(); i++) {
             if(clients[i]->hasUsername){
                 stringstream ss;
+                stringstream ss1;
                 ss << (i + 1);
                 string number;
                 ss >> number;
-                string str = "User " + number + ": " + clients[i]->userName + "\n";
+                int time = clients[i]->lastRcvKA;
+                ss1 << time;
+                string t = ss1.str();
+                string str = "User " + number + ": " + clients[i]->userName + " connected at: " + t + "\n";
                 strcat(buffer, str.c_str());
             }
         }
@@ -455,6 +376,20 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         ///TODO senda lista af okkar tengingum UDP port usersins
     }
 }
+/*bool isFull() {
+    int counter = 0;
+    for(int i = 0 ; (int)clients.size() ; i++) {
+        if(!clients[i]->isUser){
+            counter++;
+        }
+    }
+    if(counter == 5){
+        return true;
+    }
+    else{
+        return false;
+    }
+}*/
 
 string listServersReply(string localip, string tcp, string udp){
     string str = serverID + "," + localip + "," + tcp + "," + udp + ";";
@@ -590,17 +525,31 @@ int main(int argc, char* argv[]){
 
 ///##################### RUNNING BODY OF SERVER ######################
     while(true){
-        //clean out knockingClients array of anyone who has not knocked in 2 minutes
-        /*int t = getTime();
-		if(knockingClients.size() > 0){
-			for(int i = 0 ; i < (int)knockingClients.size() ; i++){
-				if(t - knockingClients[i]->timeOfKnock1 > MAX_TIME_INTERVAL){
-					cout << "deleting " << knockingClients[i]->peerName << endl;
-					knockingClients.erase(knockingClients.begin() + i);
-					break;
+        // KEEPALIVE Operations
+        int t = getTime();
+        // ### IF CLIENT HAS NOT SENT 'KEEPALIVE' IN THE LAST 180 SECONDS, DROP THEM ###
+		if(clients.size() > 0){
+			for(int i = 0 ; i < (int)clients.size() ; i++){
+				if(t - clients[i]->lastRcvKA > MAX_TIME_INTERVAL && !clients[i]->isUser) {
+                    leave(clients[i], message);
 				}
 			}
-        }*/
+        }
+        // ### IF OUR SERVER HAS NOT SENT 'KEEPALIVE' IN 70 SECONDS, SEND 'KEEPALIVE' TO EVERYONE EXCEPT OUR CLIENT
+        if (stillAliveTime - getTime() > 70) {
+            for(int i = 0; i < (int)clients.size(); i++) {
+                if (!clients[i]->isUser) {
+                    bzero(message, strlen(message));
+                    strcpy(message, "CMD,");
+                    strcat(message, clients[i]->userName.c_str());
+                    strcat(message, ",");
+                    strcat(message, serverID.c_str());
+                    strcat(message, ",KEEPALIVE");
+                    send(clients[i]->socketVal, message, strlen(message), 0);
+                    cout << "KEEPALIVE MESSAGE SENT" << endl;
+                }
+            }
+        }
 
         //reset the fd_set
         FD_ZERO(&masterFD);
@@ -638,16 +587,16 @@ int main(int argc, char* argv[]){
             newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
             validateSocket(newSock);
             getpeername(newSock, (struct sockaddr * )&cli_addr, (socklen_t *)&cli_addrlen);
-
-            clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr)));
+            int time = getTime();
+            clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr), time));
 
             // ### BÆTA VIÐ IF-SETNINGU HÉR TIL AÐ KOMA Í VEG FYRIR AÐ SENDA Á EIGIN CLIENT ###
             // ### SPURNING SAMT HVORT AÐ ÞETTA EIGI HEIMA HÉR ÞAR SEM ÞETTA ER LISTENING SOCKET? ###
-            /*cout << "Sending message to other server: ";
-            strcpy(message, "CMD,,V_GROUP_15,ID");
+            cout << "Sending message to other server: ";
+            strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
             cout << message << endl;
 
-            send(newSock, message, strlen(message), 0);*/
+            send(newSock, message, strlen(message), 0);
 
             /*else{
                 close(newSock);

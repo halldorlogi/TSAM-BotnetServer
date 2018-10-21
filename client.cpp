@@ -36,7 +36,7 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
         server->h_length);
 
     serv_addr.sin_port = htons(portno);
-    char loginCommand[27];
+    char loginCommand[28];
 	strcpy(loginCommand, "V_GROUP_15_I_am_your_father");
 
     // Attempt a connection to the socket.
