@@ -62,7 +62,7 @@ public:
 vector<ClientInfo*> clients;
 
 //the server Id
-string serverID = "V_GROUP_15_HLH";
+string serverID = "V_GROUP_15_HBS";
 
 void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
     int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
@@ -83,7 +83,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
         strcpy(message, "CMD,,V_GROUP_15,ID");
         send(instructorsock, message, strlen(message), 0);
         clients.push_back(new ClientInfo(instructorsock, server->h_name));
-        clients[clients.end()]->tcpPort = portno;
+        clients[clients.size()-1]->tcpPort = portno;
     }
 }
 
@@ -151,94 +151,6 @@ void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
     cout << "port is " << serv_addr.sin_port << endl;
 }
 
-///manages the knockingClients vector based on information given.
-/*void vectorManagement(string peerName, int portno, int t){
-    //if this is the port, then he is starting the sequence and we add him into the vector.
-    if(portno == KNOCK_PORT_1){
-        int i = 0;
-        if(knockingClients.size() > 0){
-            i = (int)knockingClients.size() - 1;
-        }
-        knockingClients.push_back(new ClientInfo(peerName));
-        knockingClients[i]->knock1 = true;
-        knockingClients[i]->timeOfKnock1 = t;
-    }
-    //if this is the port, he is attempting to continue the sequence.
-    else if(portno == KNOCK_PORT_2){
-        for(int i = 0 ; i < (int)knockingClients.size() ; i++){
-            if(knockingClients[i]->peerName == peerName){
-                knockingClients[i]->knock2 = true;
-                knockingClients[i]->timeOfKnock2 = t;
-            }
-        }
-    }
-}
-
-///checks who is knocking on a port, calls vectorManager to store information about who knocks on what port and when
-void checkWhoIsKnocking(struct sockaddr_in &cli_addr, int sockfd, int portno, socklen_t len){
-    //accept the connection
-    cout << "knock knock " << portno << endl;
-    int knockerSock = accept(sockfd, (struct sockaddr *)&cli_addr, &len);
-    validateSocket(knockerSock);
-    //see who it is
-    getpeername(knockerSock, (struct sockaddr * )&cli_addr, &len);
-    string peerName = inet_ntoa(cli_addr.sin_addr);
-    cout << peerName << endl;
-    int t = getTime();
-
-    //close the connection
-    close(knockerSock);
-    vectorManagement(peerName, portno, t);
-}*/
-
-///similar to checkWhoIsKnocking but specifically for the listening port. Does not close the socket
-/*int checkIfThisPeerIsAllowed(struct sockaddr_in &cli_addr, int sockfd, socklen_t len){
-    //see who it is
-    getpeername(sockfd, (struct sockaddr * )&cli_addr, &len);
-    string peerName = inet_ntoa(cli_addr.sin_addr);
-    int t = getTime();
-    //if they have knocked on KNOCK_PORT_2 and less than 1200000ms have passed, they get in.
-    for(int i = 0 ; i < (int)knockingClients.size() ; i++){
-        //find the right client in the vector
-        if(knockingClients[i]->peerName == peerName){
-            //check the time
-            if(knockingClients[i]->knock2 && t - knockingClients[i]->timeOfKnock1 < MAX_TIME_INTERVAL){
-                //save this socket
-                knockingClients[i]->socketVal = sockfd;
-                //add this client to the allowedClients vector and erase him from the knockingClients vector
-                allowedClients.push_back(knockingClients[i]);
-                knockingClients.erase(knockingClients.begin() + i);
-
-                //test
-                //cout << allowedClients[0]->peerName << endl;
-                return 1;
-            }
-        }
-    }
-    return 0;
-}*/
-/*
-///Generates a new serverID using the fortune command, a timestamp and the initials of this group (HAH)
-string newID(){
-    string str;
-    string line;
-
-    //call the fortune command and save the output into a txt file
-    system("fortune -s > ServerID.txt");
-    ifstream idFile("ServerID.txt");
-
-    //read the txt file
-    while(!idFile.eof()){
-        getline(idFile, line);
-        str += line;
-    }
-
-    //add the timestamp and initials
-    str += "\n" + getReadableTime() + "\nHAH";
-    idFile.close();
-    return str;
-}
-*/
 ///Sends the buffer to all connected clients (except the original sender if alsoSendToSender is false)
 void sendBufferToAll(ClientInfo* user, char* buffer, bool alsoSendToSender){
     buffer[strlen(buffer)] = '\0';
@@ -308,10 +220,13 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
                 cout << fromServerID << " has requested to connect" << endl;
                 cout << "Sending RSP..." << endl;
                 bzero(buffer, strlen(buffer));
-                strcpy(buffer, "RSP, ,");
+                strcpy(buffer, "RSP,");
+                strcat(buffer, fromServerID.c_str());
+                strcat(buffer, ",");
                 strcat(buffer, serverID.c_str());
                 strcat(buffer, ",");
                 strcat(buffer, serverID.c_str());
+                cout << buffer << endl;
                 send(user->socketVal, buffer, strlen(buffer), 0);
             }
         }
@@ -322,6 +237,40 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
+        if(toServerID == serverID){
+            if(!user->hasUsername){
+                bool fromThisServer = true;
+                /*for(int i = 0 ; (int)clients.size() ; i++){
+                    if(clients[i]->userName.compare(fromServerID) == 0){
+                        ///We DON'T know the serverID of the socket who sent us the RSP but we DO know the server who originally sent it
+                        fromServerID = false;
+                        break;
+                    }
+                }*/
+                if(fromThisServer == true){
+                    ///We DON'T know the serverID of this socket and we DON't know any server of this name. This must be this socket's serverID
+                    user->userName = fromServerID;
+                    user->hasUsername = true;
+                }
+            }
+            else{
+                if(user->userName.compare(fromServerID) == 0){
+                    ///we DO know the serverID of this socket and it IS from that server
+                }
+                else{
+                    bool fromKnownServer = false;
+                    for(int i = 0 ; (int)clients.size() ; i++){
+                        if(clients[i]->userName.compare(fromServerID) == 0){
+                            ///the RSP is sent from another server we DO know
+                            fromKnownServer = true;
+                        }
+                    }
+                    if(fromKnownServer == false){
+                        ///This RSP is from a server we DON'T know.
+                    }
+                }
+            }
+        }
         cout << "Response received: " << srvcmd << endl;
         cout << "Adding " << fromServerID << " to network" << endl;
 
@@ -643,11 +592,10 @@ int main(int argc, char* argv[]){
 
             // ### BÆTA VIÐ IF-SETNINGU HÉR TIL AÐ KOMA Í VEG FYRIR AÐ SENDA Á EIGIN CLIENT ###
             // ### SPURNING SAMT HVORT AÐ ÞETTA EIGI HEIMA HÉR ÞAR SEM ÞETTA ER LISTENING SOCKET? ###
-            /*cout << "Sending message to other server: ";
-            strcpy(message, "CMD,,V_GROUP_15,ID");
-            cout << message << endl;
+            cout << "Sending message to other server: ";
+            strcpy(message, "CMD,,V_GROUP_15_HBS,ID");
 
-            send(newSock, message, strlen(message), 0);*/
+            send(newSock, message, strlen(message), 0);
 
             /*else{
                 close(newSock);
