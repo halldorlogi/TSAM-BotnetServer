@@ -61,7 +61,7 @@ public:
 vector<ClientInfo*> clients;
 
 //the server Id
-string serverID = "V_GROUP_15_HLH";
+string serverID = "V_GROUP_15_HBS";
 
 ///Get the amount of milliseconds elapsed since 00:00 Jan 1 1970 (I think)
 int getTime(){
@@ -89,6 +89,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
         cout << "connection to " << server->h_name << " successful" << endl;
         strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
         send(instructorsock, message, strlen(message), 0);
+
         int time = getTime();
         clients.push_back(new ClientInfo(instructorsock, server->h_name, time));
         clients[clients.size()-1]->tcpPort = portno;
@@ -226,6 +227,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
                 strcat(buffer, serverID.c_str());
                 strcat(buffer, ",");
                 strcat(buffer, serverID.c_str());
+                cout << buffer << endl;
                 send(user->socketVal, buffer, strlen(buffer), 0);
             }
         }
@@ -239,6 +241,40 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
+        if(toServerID == serverID){
+            if(!user->hasUsername){
+                bool fromThisServer = true;
+                /*for(int i = 0 ; (int)clients.size() ; i++){
+                    if(clients[i]->userName.compare(fromServerID) == 0){
+                        ///We DON'T know the serverID of the socket who sent us the RSP but we DO know the server who originally sent it
+                        fromServerID = false;
+                        break;
+                    }
+                }*/
+                if(fromThisServer == true){
+                    ///We DON'T know the serverID of this socket and we DON't know any server of this name. This must be this socket's serverID
+                    user->userName = fromServerID;
+                    user->hasUsername = true;
+                }
+            }
+            else{
+                if(user->userName.compare(fromServerID) == 0){
+                    ///we DO know the serverID of this socket and it IS from that server
+                }
+                else{
+                    bool fromKnownServer = false;
+                    for(int i = 0 ; (int)clients.size() ; i++){
+                        if(clients[i]->userName.compare(fromServerID) == 0){
+                            ///the RSP is sent from another server we DO know
+                            fromKnownServer = true;
+                        }
+                    }
+                    if(fromKnownServer == false){
+                        ///This RSP is from a server we DON'T know.
+                    }
+                }
+            }
+        }
         cout << "Response received: " << srvcmd << endl;
         cout << "Adding " << fromServerID << " to network" << endl;
 
@@ -593,6 +629,7 @@ int main(int argc, char* argv[]){
             // ### BÆTA VIÐ IF-SETNINGU HÉR TIL AÐ KOMA Í VEG FYRIR AÐ SENDA Á EIGIN CLIENT ###
             // ### SPURNING SAMT HVORT AÐ ÞETTA EIGI HEIMA HÉR ÞAR SEM ÞETTA ER LISTENING SOCKET? ###
             cout << "Sending message to other server: ";
+
             strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
             cout << message << endl;
 
