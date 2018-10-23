@@ -18,6 +18,37 @@ void error(const char *msg)
     exit(0);
 }
 
+/*void recvUDPmessage(char* buffer, int portno){
+    
+    struct sockaddr_in cli_addr;
+    socklen_t clilen = sizeof(cli_addr);
+    int udpSocket;
+    int set = 1;
+    if((udpSocket=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
+        perror("failed to make udp socket");
+        exit(0);
+    }
+
+    memset((char *) &cli_addr, 0, sizeof(cli_addr));
+    cli_addr.sin_family = AF_INET;
+    cli_addr.sin_addr.s_addr = INADDR_ANY;
+    cli_addr.sin_port = htons(portno);
+    
+    if (::bind(udpSocket, (struct sockaddr *)&cli_addr, sizeof(cli_addr)) < 0) {
+        perror("failed to bind");
+        exit(0);
+    }
+    
+    int recv = recvfrom(udpSocket, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, &clilen);
+    cout << "printing udp" << buffer << endl;
+    if(setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &set, sizeof(set)) < 0)
+    {
+        printf("Failed to set SO_REUSEADDR for port! ");
+        perror("setsockopt failed: ");
+    }
+    close(udpSocket);
+}*/
+
 bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd, const char* addr){
 
     if (sockfd < 0) {
@@ -45,8 +76,8 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
         cout << "Port: " << portno << " CLOSED" << endl;
         return false;
     }
-    //cout << "Sending loginCommand to server: " << loginCommand << endl;
-	//send(sockfd, loginCommand, strlen(loginCommand), 0);
+    cout << "Sending loginCommand to server: " << loginCommand << endl;
+	send(sockfd, loginCommand, strlen(loginCommand), 0);
     return true;
 }
 
@@ -71,13 +102,15 @@ int main(int argc, char *argv[]) {
 
     // ** INITIALIZING VARIABLES **//
     //int knock1, knock2,
-    int sockfd;
+    int sockfd, udpsockfd;
     string address;
     struct sockaddr_in serv_addr;           // Socket address structure
     struct hostent *server;
     struct timeval time;
     string line;
     char buffer[1000];
+    char udpbuffer[1000];
+    int set = 1;
 
     fd_set masterFD, readFD;
 
@@ -95,6 +128,7 @@ int main(int argc, char *argv[]) {
     //knock1 = socket(AF_INET, SOCK_STREAM, 0); // Open Socket
     //knock2 = socket(AF_INET, SOCK_STREAM, 0); // Open Socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0); // Open Socket
+    udpsockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
     //if(knockOnPort(serv_addr, server, 33745, knock1, addr)){
       //  close(knock1);
@@ -132,12 +166,14 @@ int main(int argc, char *argv[]) {
                             cout << string(buffer, 0, bytesRecv) << endl;
                         }
                     }
+                   
                     time.tv_sec = 1;
                     select(STDIN_FILENO + 1, &readFD, NULL, NULL, &time);
                     if(FD_ISSET(STDIN_FILENO, &readFD)){
                         getline(cin, input);
                         if(input.size() > 0){
                             send(sockfd, input.c_str(), input.size() + 1, 0);
+
                         }
                         else{
                             cout << "That's not a valid command" << endl;

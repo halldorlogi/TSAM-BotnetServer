@@ -19,6 +19,9 @@
 #include <sstream>
 
 #define MAX_TIME_INTERVAL 180
+#define TCPport "4023"
+#define UDPport "4024"
+#define serverID "V_GROUP_15"
 using namespace std;
 
 ///A class that holds information about a client
@@ -39,15 +42,19 @@ public:
         userName = "";
         this->socketVal = socketVal;
         lastRcvKA = 0;
+        tcpPort = 0;
+        udpPort = 0;
     }
 
-    ClientInfo(int socketVal, string peerName, int time){
+    ClientInfo(int socketVal, string peerName, int time) { //,int tcpPort, int udpPort){
         hasUsername = false;
         isUser = false;
         this->peerName = peerName;
         userName = "";
         this->socketVal = socketVal;
         lastRcvKA = time;
+        //this->tcpPort = tcpPort;
+        //this->udpPort = udpPort;
     }
 
     ~ClientInfo(){
@@ -55,24 +62,22 @@ public:
     }
 };
 
-//clients who are attempting to connect via portknocking but haven't gotten the right sequence
-
-//clients who have successfully connected with the correct sequence of portknocking
+// ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
 vector<ClientInfo*> clients;
 
-//the server Id
-string serverID = "V_GROUP_15_HBS";
-
-///Get the amount of milliseconds elapsed since 00:00 Jan 1 1970 (I think)
+/// ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
 int getTime(){
     int t = (int)time(0);
     return t;
 }
 
+// ### A VARIABLE USED IN 'KEEPALIVE ###
 int stillAliveTime = getTime();
 
-void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
-    int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
+// ### CONNECT TO OTHER SERVER AND ADD THE SERVER INFORMATION TO CLIENTS ###
+void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno, int udpportno) {
+    
+    int externalSock = socket(AF_INET, SOCK_STREAM, 0);
     struct hostent *server = gethostbyname(address.c_str());
 
     char message[1000];
@@ -84,15 +89,14 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int portno) {
           (char *) &serv_addr.sin_addr.s_addr,
           server->h_length);
 
-    serv_addr.sin_port = htons(portno);
-    if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
+    serv_addr.sin_port = htons(tcpportno);
+    if(connect(externalSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
         cout << "connection to " << server->h_name << " successful" << endl;
-        strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
-        send(instructorsock, message, strlen(message), 0);
-
+        strcpy(message, "CMD,,V_GROUP_15_HLH,ID\n");
+        send(externalSock, message, strlen(message), 0);
+        cout << "serv_addr is now: " << inet_ntop(AF_INET, &(serv_addr.sin_addr), message, 1000) << endl;
         int time = getTime();
-        clients.push_back(new ClientInfo(instructorsock, server->h_name, time));
-        clients[clients.size()-1]->tcpPort = portno;
+        clients.push_back(new ClientInfo(externalSock, server->h_name, time)); //, tcpportno, udpportno));
     }
 }
 
@@ -119,13 +123,135 @@ string getReadableTime(){
 
 /// A function that removes the first word of the buffer and saves it as the firstWord string
 void manageBuffer(char* buffer, string &firstWord) {
-
-    string str = string(buffer);
-    char delimit[] = ",";
-    firstWord = strtok(buffer, delimit);
-    str = str.substr(str.find_first_of(delimit)+1);
-    strcpy(buffer, str.c_str());
+    
+    // ### ATH SERVER CRASHAR EF BUFFER ER TÓMUR !!! ###
+        string str = string(buffer);
+        char delimit[] = ",";
+        firstWord = strtok(buffer, delimit);
+        str = str.substr(str.find_first_of(delimit)+1);
+        strcpy(buffer, str.c_str());
 }
+
+void openUDPPort(int &UDPsock) {
+
+    struct addrinfo hints, *servinfo, *p;
+    int rv;
+    
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC; // set to AF_INET to force IPv4
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE; // use my IP
+    
+    if ((rv = getaddrinfo(NULL, "4024", &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    }
+    
+    // loop through all the results and bind to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((UDPsock = socket(p->ai_family, p->ai_socktype,
+                              p->ai_protocol)) == -1) {
+            perror("listener: socket");
+            continue;
+        }
+        
+        if (::bind(UDPsock, p->ai_addr, p->ai_addrlen) == -1) {
+            close(UDPsock);
+            perror("listener: bind");
+            continue;
+        }
+        
+        break;
+    }
+    
+    if (p == NULL) {
+        fprintf(stderr, "listener: failed to bind socket\n");
+    }
+    
+    freeaddrinfo(servinfo);
+}
+
+// ## beej.us ##
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+    
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+string listServersReply(){
+    string str;
+    /*if (clients.size() == 1) {
+        str = "Our server list is empty!\n";
+        return str;
+    }*/
+    stringstream ss;
+    ss << serverID << "," << "0.0.0.0" << "," << TCPport << "," UDPport << ";";
+    ss >> str;
+    str += "\n";
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+        ClientInfo* c = clients[i];
+        
+        // !!!!!!!!! MUNA AÐ BREYTA EFTIR AÐ VIÐ FÖRUM LIVE - Á AÐ VERA '!c->isUser' SVO AÐ CLIENT FARI EKKI Á LISTANN !!!!!!!!
+        
+        if((c->isUser)){
+            if(c->hasUsername){
+                str += c->userName;
+            }
+            str += "," + c->peerName + "," + to_string(c->tcpPort) + "," + to_string(c->udpPort) + ";";
+        }
+    }
+    str += "\n";
+    return str;
+}
+
+// ### A FUNCTION TO MAKE SURE WE ONLY SEND OUR SERVER LIST IN CASE OF 'LISTSERVERS' ###
+bool handleForeignLISTSERVERS(char* UDPBuffer) {
+    
+    string command;
+    manageBuffer(UDPBuffer, command);
+    if (command == "LISTSERVERS") {
+        string package = listServersReply();
+        bzero(UDPBuffer, strlen(UDPBuffer));
+        strcpy(UDPBuffer, package.c_str());
+        return true;
+    }
+    return false;
+}
+
+void listenForUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen, char* TCPBuffer, char *UDPBuffer, char* remoteIP_udp) {
+    cout << "Listening for UDP" << endl;
+    int numbytes;
+    //printf("listener: waiting to recvfrom...\n");
+    bzero(UDPBuffer, strlen(UDPBuffer));
+    if ((numbytes = recvfrom(UDPsock, UDPBuffer, 1000-1 , 0,
+                             (struct sockaddr *)&addr_udp, &udp_addrlen)) == -1) {
+        perror("recvfrom");
+        exit(1);
+    }
+    cout << UDPBuffer << endl;
+    //cout << "Recieved UDP message from: "
+    UDPBuffer[numbytes-1] = '\0';
+    //printf("listener: got packet from %s\n",
+           //inet_ntop(addr_udp.ss_family,
+                    // get_in_addr((struct sockaddr *)&addr_udp),
+                     //remoteIP_udp, sizeof remoteIP_udp));
+    //printf("listener: packet contains \"%s\"\n", UDPBuffer);
+    
+    if (handleForeignLISTSERVERS(UDPBuffer)) {
+        cout << "Sending buffer back to UDP port ! " << endl;
+        sendto(UDPsock, UDPBuffer, strlen(UDPBuffer), 0, (struct sockaddr *) &addr_udp, udp_addrlen);
+    }
+
+}
+
+/*void sendUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen, char* UDPbuffer) {
+
+    sendto(UDPsock, UDPbuffer, strlen(UDPbuffer), 0, (struct sockaddr *) &addr_udp, udp_addrlen);
+    
+}*/
 
 ///opens the given port on the given socket.
 void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
@@ -137,7 +263,7 @@ void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
         cerr << ("setsockopt(SO_REUSEADDR) failed") << endl;
         exit(0);
     }
-
+    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = /*inet_addr("127.0.0.1");//*/INADDR_ANY;
     serv_addr.sin_port = htons(portno);
@@ -149,7 +275,7 @@ void openPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
     }
 
     cout << "ip is " << inet_ntoa(serv_addr.sin_addr) << endl;
-    cout << "port is " << serv_addr.sin_port << endl;
+    cout << "port is " << htons(serv_addr.sin_port) << endl;
 }
 
 ///Sends the buffer to all connected clients (except the original sender if alsoSendToSender is false)
@@ -188,11 +314,31 @@ void leave(ClientInfo* user, char* buffer){
     }
 }
 
+//Function to check if the two token characters are in the beginning and end of the buffer, returns a string with the buffer content
+string checkTokens(char* buffer) {
+    string str = string(buffer);
+    
+    int sstr = str.size();
+    
+    if(str.find("01") == 0 && str.find("04") == sstr - 2)
+    {
+        str.erase(0,2);
+        str.erase(str.end() - 2, str.end());
+    }
+    else
+    {
+        return "Tokens not valid";
+    }
+    
+    return str;
+}
+
 ///DECIDES WHAT TO DO BASED ON THE COMMAND RECEIVED FROM THE CLIENT
 void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     string command;
     string address;
-    string port;
+    string tcpport;
+    string udpport;
     string name;
     string toServerID;
     string fromServerID;
@@ -203,35 +349,54 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
 
     if (command == "connectTo") {
         manageBuffer(buffer, address);
-        manageBuffer(buffer, port);
+        manageBuffer(buffer, tcpport);
+        manageBuffer(buffer, udpport);
         struct sockaddr_in serv_addr;
         bzero((char*)&serv_addr, sizeof(serv_addr));
-        connectToServer(serv_addr, address, stoi(port));
+        connectToServer(serv_addr, address, stoi(tcpport), stoi(udpport));
     }
+    
+    /*if (command == "LISTSERVERS") {
+        string portno;
+        manageBuffer(buffer, portno);
+        bzero(UDPBuffer, strlen(UDPBuffer));
+        strcpy(UDPBuffer, "LISTSERVERS");
+        cout << "Sending LISTSERVERS to port: " << portno << endl;
+        cout << "Buffer is now: " << UDPBuffer << endl;
+        sendUDP(UDPsock, addr_udp, udp_addrlen, UDPBuffer);
+    }*/
 
     if (command == "CMD") {
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
-        if (srvcmd == "ID") {
+        
+        if (srvcmd == "LISTSERVERS\n") {
+            
+            cout << "Other server requested a LISTSERVERS" << endl;
+        }
+        
+        if (srvcmd == "ID\n") {
             // ### FIRST CASE: CMD, ,GROUP_ID,<COMMAND> ###
             // ### SECOND CASE: CMD,,GROUP_ID<COMMAND> ###
             // ÞARF MÖGULEGA AÐ LAGA - VILJUM GETA VITAÐ HVORT ER HVAÐ
-            if (toServerID == " " || toServerID == fromServerID) {
+                if (toServerID == " " || toServerID == fromServerID) {
                 cout << fromServerID << " has requested to connect" << endl;
                 cout << "Sending RSP..." << endl;
                 bzero(buffer, strlen(buffer));
                 strcpy(buffer, "RSP,");
                 strcat(buffer, fromServerID.c_str());
                 strcat(buffer, ",");
-                strcat(buffer, serverID.c_str());
+                strcat(buffer, serverID);
                 strcat(buffer, ",");
-                strcat(buffer, serverID.c_str());
+                strcat(buffer, serverID);
+                strcat(buffer, "\n");
                 cout << buffer << endl;
                 send(user->socketVal, buffer, strlen(buffer), 0);
-            }
+                }
         }
-        if (srvcmd == "KEEPALIVE") {
+        
+        if (srvcmd.compare("KEEPALIVE") == 0) {
             user->lastRcvKA = getTime();
         }
     }
@@ -280,10 +445,12 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
 
     }
 
-    if (command == "CONNECT") {
+    if (command == "CONNECT" && user->isUser) {
         //set the username
         user->userName = string(buffer);
         user->hasUsername = true;
+        user->tcpPort = 4020;
+        user->udpPort = 4021;
 
         //send the user a confirmation that he is now connected to the server
         strcpy(buffer, "You are now connected to the server as \"");
@@ -297,27 +464,18 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         strcat(buffer, " has just connected to the server\n");
         sendBufferToAll(user, buffer, 0);*/
     }
+    
+    if (command == "CONNECT" && !user->isUser) {
+        user->userName = clients[(int)clients.size()-1]->userName;
+        cout << "New user connected" << endl;
+    }
 
     //send the current server id to the user
     else if(command == "ID"){
         bzero(buffer, strlen(buffer));
-        strcpy(buffer, serverID.c_str());
+        strcpy(buffer, serverID);
         send(user->socketVal, buffer, strlen(buffer), 0);
     }
-
-    //change the server id
-   /* else if(command == "CHANGE" && user->hasUsername){
-        manageBuffer(buffer, command);
-        if(command == "ID"){
-            serverID = newID();
-            strcpy(buffer, "The ID has been changed to \"");
-            strcat(buffer, &serverID[0]);
-            strcat(buffer, "\"\n");
-
-            //alert clients that the server id has been changed.
-            sendBufferToAll(user, buffer, 1);
-        }
-    }*/
 
     //send the user a list of clients who are connected
     else if (command == "WHO" && user->hasUsername) {
@@ -333,11 +491,10 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
                 int time = clients[i]->lastRcvKA;
                 ss1 << time;
                 string t = ss1.str();
-                string str = "User " + number + ": " + clients[i]->userName + " connected at: " + t + "\n";
+                string str = "User " + number + ": " + clients[i]->userName + "\n";
                 strcat(buffer, str.c_str());
             }
         }
-
         send(user->socketVal, buffer, strlen(buffer), 0);
     }
 
@@ -358,7 +515,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     }
 
     //sends a message to a specific or all users
-    else if(command == "MSG" && user->hasUsername){
+    else if(command == "MSG" && user->hasUsername) {
 
         //since MSG is a 2 word command, we need the second word
         manageBuffer(buffer, name);
@@ -383,7 +540,8 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         }
 
         //try to find the username specified
-        else{
+        else {
+            
             for(int i = 0 ; i < (int)clients.size() ; i++){
 
                 //if we find it, send the message to that user.
@@ -408,10 +566,8 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
             }
         }
     }
-    else if (command == "LISTSERVERS"){
-        ///TODO senda lista af okkar tengingum UDP port usersins
-    }
 }
+
 /*bool isFull() {
     int counter = 0;
     for(int i = 0 ; (int)clients.size() ; i++) {
@@ -427,79 +583,25 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     }
 }*/
 
-string listServersReply(string localip, string tcp, string udp){
-    string str = serverID + "," + localip + "," + tcp + "," + udp + ";";
-
-    for(int i = 0 ; i < (int)clients.size() ; i++){
-        ClientInfo* c = clients[i];
-        if(!(c->isUser)){
-            if(c->hasUsername){
-                str += c->userName;
-            }
-            str += "," + c->peerName + "," + to_string(c->tcpPort) + "," + to_string(c->udpPort) + ";";
-        }
-    }
-    return str;
-}
-
-
-void sendUDPmessage(int portno, char* buffer){
-
-    struct sockaddr_in cli_addr;
-    socklen_t clilen = sizeof(cli_addr);
-
-    int udpSocket;
-    if((udpSocket=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
-		perror("failed to make udp socket");
-		exit(0);
-    }
-    memset((char *) &cli_addr, 0, sizeof(cli_addr));
-    cli_addr.sin_family = AF_INET;
-    cli_addr.sin_port = htons(portno);
-
-    sendto(udpSocket, buffer, strlen(buffer), 0, (struct sockaddr *) &cli_addr, clilen);
-    close(udpSocket);
-}
-
-
-
-//Function to check if the two token characters are in the beginning and end of the buffer, returns a string with the buffer content
-string checkTokens(char* buffer) {
-    string str = string(buffer);
-
-    int sstr = str.size();
-
-    if(str.find("01") == 0 && str.find("04") == sstr - 2)
-    {
-        str.erase(0,2);
-        str.erase(str.end() - 2, str.end());
-    }
-    else
-    {
-        return "Tokens not valid";
-    }
-
-    return str;
-}
-
-
-
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[]) {
 ///####################### VARIABLE INITIALIZATION #######################
 
     int listeningSock, UDPsock, newSock, messageCheck, socketVal, maxSocketVal;
     struct sockaddr_in serv_addr, cli_addr;
-    socklen_t cli_addrlen, serv_addrlen;
-
+    struct sockaddr_storage addr_udp;
+    socklen_t cli_addrlen, serv_addrlen, udp_addrlen;
+    char remoteIP_udp[INET6_ADDRSTRLEN];
+    
     cout << "The server ID is: " << serverID << endl;
 
     //the message buffer
     char message[1000];
     char UDPbuffer[1000];
+    //char UDPbuffer_copy[1000];
     char localip[80];
 
     // a set of file descriptors
-    fd_set masterFD;
+    fd_set masterFD, read_fds;
 
 ///##################### SETTING UP MAIN SOCKETS ########################
 
@@ -508,19 +610,26 @@ int main(int argc, char* argv[]){
     validateSocket(knockSock1);
     knockSock2 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     validateSocket(knockSock2);*/
+    
+    // ### Setting up TCP socket ###
     listeningSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     validateSocket(listeningSock);
-    UDPsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    validateSocket(UDPsock);
-
+    
+    // ########################################################################     Setting up UDP scoket ########################################################################
+    
+    //UDPsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    //validateSocket(UDPsock);
 
     //socket settings
     bzero((char*)&serv_addr, sizeof(serv_addr));
+    bzero((char*)&addr_udp, sizeof(addr_udp));
 
     //openPort(serv_addr, knockSock1, KNOCK_PORT_1);
     //openPort(serv_addr, knockSock2, KNOCK_PORT_2);
     openPort(serv_addr, listeningSock, 4023);
-    openPort(serv_addr, UDPsock, 4024);
+    openUDPPort(UDPsock);
+
+    //openUDPPort(addr_udp, udp_addrlen, UDPsock, 4024);
 
     //listen for activity
    // listen(knockSock1, 5);
@@ -529,35 +638,9 @@ int main(int argc, char* argv[]){
 
     cli_addrlen = sizeof(cli_addr);
     serv_addrlen = sizeof(serv_addr);
-
+    udp_addrlen = sizeof(addr_udp);
+    
     inet_ntop(AF_INET, &serv_addr.sin_addr, localip, 80);
-
-
-///#################### Reyna að tengjast við instructor server ####################
-
-    /*int instructorsock = socket(AF_INET, SOCK_STREAM, 0);
-
-    struct hostent *server = gethostbyname("skel.ru.is");
-
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-
-    bcopy((char *) server->h_addr,
-        (char *) &serv_addr.sin_addr.s_addr,
-        server->h_length);
-
-    serv_addr.sin_port = htons(4023);
-    if(connect(instructorsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
-        cout << "connection to " << server->h_name << " successful" << endl;
-        strcpy(message, "CMD,,V_GROUP_15,ID");
-            send(instructorsock, message, strlen(message), 0);
-
-        strcpy(UDPbuffer, "V_GROUP_15,");
-        strcat(UDPbuffer, server->h_name);
-        strcat(UDPbuffer, ",4010,4011;");
-
-        //sendUDPmessage(4001, UDPbuffer);
-    }*/
 
 ///##################### RUNNING BODY OF SERVER ######################
     while(true){
@@ -571,24 +654,27 @@ int main(int argc, char* argv[]){
 				}
 			}
         }
+        
         // ### IF OUR SERVER HAS NOT SENT 'KEEPALIVE' IN 70 SECONDS, SEND 'KEEPALIVE' TO EVERYONE EXCEPT OUR CLIENT
-        if (stillAliveTime - getTime() > 70) {
+        if (t-stillAliveTime > 70) {
             for(int i = 0; i < (int)clients.size(); i++) {
                 if (!clients[i]->isUser) {
                     bzero(message, strlen(message));
                     strcpy(message, "CMD,");
                     strcat(message, clients[i]->userName.c_str());
                     strcat(message, ",");
-                    strcat(message, serverID.c_str());
-                    strcat(message, ",KEEPALIVE");
+                    strcat(message, serverID);
+                    strcat(message, ",KEEPALIVE\n");
                     send(clients[i]->socketVal, message, strlen(message), 0);
                     cout << "KEEPALIVE MESSAGE SENT" << endl;
                 }
             }
+            stillAliveTime = getTime();
         }
-
+        
         //reset the fd_set
         FD_ZERO(&masterFD);
+        FD_ZERO(&read_fds);
         //FD_SET(knockSock1, &masterFD);
         //FD_SET(knockSock2, &masterFD);
         FD_SET(listeningSock, &masterFD);
@@ -606,72 +692,67 @@ int main(int argc, char* argv[]){
                 maxSocketVal = socketVal;
             }
         }
-
+        
+        timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
         //wait for something to happen on some socket. Will wait forever if nothing happens.
-        select(maxSocketVal + 1, &masterFD, NULL, NULL, NULL);
+        if (select(maxSocketVal + 1, &masterFD, NULL, NULL, &tv) > 0) {
 
-        //if something happens on the knocking socket, we check who it is.
-       /* if(FD_ISSET(knockSock1, &masterFD)){
-            checkWhoIsKnocking(cli_addr, knockSock1, KNOCK_PORT_1, cli_addrlen);
-        }
-        else if(FD_ISSET(knockSock2, &masterFD)){
-            checkWhoIsKnocking(cli_addr, knockSock2, KNOCK_PORT_2, cli_addrlen);
-        }*/
+            //if something happens on the listening socket, someone is trying to connect to the server.
+            if(FD_ISSET(listeningSock, &masterFD)){
+                
+                newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
+                validateSocket(newSock);
+                getpeername(newSock, (struct sockaddr * )&cli_addr, (socklen_t *)&cli_addrlen);
+                int time = getTime();
+                clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr), time));
 
-        //if something happens on the listening socket, someone is trying to connet to the server.
-        if(FD_ISSET(listeningSock, &masterFD)){
-            newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
-            validateSocket(newSock);
-            getpeername(newSock, (struct sockaddr * )&cli_addr, (socklen_t *)&cli_addrlen);
-            int time = getTime();
-            clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr), time));
+                cout << "ip is " << inet_ntoa(cli_addr.sin_addr) << endl;
+                cout << "port is " << htons(cli_addr.sin_port) << endl;
+                
+                cout << "Sending message to other server: ";
 
-            // ### BÆTA VIÐ IF-SETNINGU HÉR TIL AÐ KOMA Í VEG FYRIR AÐ SENDA Á EIGIN CLIENT ###
-            // ### SPURNING SAMT HVORT AÐ ÞETTA EIGI HEIMA HÉR ÞAR SEM ÞETTA ER LISTENING SOCKET? ###
-            cout << "Sending message to other server: ";
+                //strcpy(message, "CMD,,V_GROUP_15_HLH,ID\n");
+                strcpy(message, "LISTSERVERS\n");
+                cout << message << endl;
 
-            strcpy(message, "CMD,,V_GROUP_15_HLH,ID");
-            cout << message << endl;
+                send(newSock, message, strlen(message), 0);
 
-            send(newSock, message, strlen(message), 0);
-
-            /*else{
-                close(newSock);
-            }*/
-        }
-
-        //if something happens on any other socket, it's probably a message
-
-        else if(FD_ISSET(UDPsock, &masterFD)){
-
-            bzero(UDPbuffer, sizeof(UDPbuffer));
-            if(recvfrom(UDPsock, (char *)UDPbuffer, sizeof(UDPbuffer), 0, (struct sockaddr *) &serv_addr, &serv_addrlen) != 0){
-                ///TODO tjekka tokens og parsa eftir kommum.
-                cout << "UDP buffer is now: ";
-                cout << UDPbuffer << endl;
+                /*else{
+                    close(newSock);
+                }*/
             }
-        }
 
-        for(int i = 0 ; i < (int)clients.size() ; i++){
-            socketVal = clients[i]->socketVal;
+            //if something happens on any other socket, it's probably a message
 
-            if(FD_ISSET(socketVal, &masterFD)){
-                bzero(message, sizeof(message));
-                //cout << "Reading message from connected peer: ";
-                messageCheck = read(socketVal, message, sizeof(message));
-                message[messageCheck] = '\0';
-                if(messageCheck != 0){
-                    //cout << message << endl;
-                    handleConnection(message, messageCheck, clients[i]);
-                }
+            else if(FD_ISSET(UDPsock, &masterFD)){
+                
+                listenForUDP(UDPsock, addr_udp, udp_addrlen, message, UDPbuffer, remoteIP_udp);
+            }
 
-                else{
-                    if(clients[i]->hasUsername){
-                        strcpy(message, "User \"");
-                        strcat(message, &clients[i]->userName[0]);
-                        strcat(message, "\" has disconnected from the server\n");
+            for(int i = 0 ; i < (int)clients.size() ; i++){
+                socketVal = clients[i]->socketVal;
+
+                if(FD_ISSET(socketVal, &masterFD)){
+                    bzero(message, sizeof(message));
+                    //cout << "Reading message from connected peer: ";
+                    messageCheck = read(socketVal, message, sizeof(message));
+                    message[messageCheck] = '\0';
+                    if(messageCheck != 0){
+                        //cout << message << endl;
+                        handleConnection(message, messageCheck, clients[i]);
                     }
-                    leave(clients[i], message);
+
+                    else{
+                        if(clients[i]->hasUsername){
+                            strcpy(message, "User \"");
+                            strcat(message, &clients[i]->userName[0]);
+                            strcat(message, "\" has disconnected from the server\n");
+                        }
+                        leave(clients[i], message);
+                    }
                 }
             }
         }
