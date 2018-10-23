@@ -19,6 +19,9 @@
 #include <sstream>
 
 #define MAX_TIME_INTERVAL 180
+#define TCPport "4023"
+#define UDPport "4024"
+#define serverID "V_GROUP_15"
 using namespace std;
 
 ///A class that holds information about a client
@@ -39,15 +42,19 @@ public:
         userName = "";
         this->socketVal = socketVal;
         lastRcvKA = 0;
+        tcpPort = 0;
+        udpPort = 0;
     }
 
-    ClientInfo(int socketVal, string peerName, int time){
+    ClientInfo(int socketVal, string peerName, int time) { //,int tcpPort, int udpPort){
         hasUsername = false;
         isUser = false;
         this->peerName = peerName;
         userName = "";
         this->socketVal = socketVal;
         lastRcvKA = time;
+        //this->tcpPort = tcpPort;
+        //this->udpPort = udpPort;
     }
 
     ~ClientInfo(){
@@ -55,22 +62,21 @@ public:
     }
 };
 
-//clients who have successfully connected with the correct sequence of portknocking
+// ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
 vector<ClientInfo*> clients;
 
-//the server Id
-string serverID = "V_GROUP_15_HLH";
-int serverUdpPort = 4024;
-
-///Get the amount of milliseconds elapsed since 00:00 Jan 1 1970 (I think)
+/// ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
 int getTime(){
     int t = (int)time(0);
     return t;
 }
 
+// ### A VARIABLE USED IN 'KEEPALIVE ###
 int stillAliveTime = getTime();
 
+// ### CONNECT TO OTHER SERVER AND ADD THE SERVER INFORMATION TO CLIENTS ###
 void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno, int udpportno) {
+    
     int externalSock = socket(AF_INET, SOCK_STREAM, 0);
     struct hostent *server = gethostbyname(address.c_str());
 
@@ -90,9 +96,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
         send(externalSock, message, strlen(message), 0);
         cout << "serv_addr is now: " << inet_ntop(AF_INET, &(serv_addr.sin_addr), message, 1000) << endl;
         int time = getTime();
-        clients.push_back(new ClientInfo(externalSock, server->h_name, time));
-        clients[clients.size()-1]->tcpPort = tcpportno;
-        clients[clients.size()-1]->udpPort = udpportno;
+        clients.push_back(new ClientInfo(externalSock, server->h_name, time)); //, tcpportno, udpportno));
     }
 }
 
@@ -183,6 +187,10 @@ string listServersReply(){
         str = "Our server list is empty!\n";
         return str;
     }*/
+    stringstream ss;
+    ss << serverID << "," << "0.0.0.0" << "," << TCPport << "," UDPport << ";";
+    ss >> str;
+    str += "\n";
     for(int i = 0 ; i < (int)clients.size() ; i++){
         ClientInfo* c = clients[i];
         
@@ -217,12 +225,14 @@ void listenForUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen
     cout << "Listening for UDP" << endl;
     int numbytes;
     //printf("listener: waiting to recvfrom...\n");
-    
+    bzero(UDPBuffer, strlen(UDPBuffer));
     if ((numbytes = recvfrom(UDPsock, UDPBuffer, 1000-1 , 0,
                              (struct sockaddr *)&addr_udp, &udp_addrlen)) == -1) {
         perror("recvfrom");
         exit(1);
     }
+    cout << UDPBuffer << endl;
+    //cout << "Recieved UDP message from: "
     UDPBuffer[numbytes-1] = '\0';
     //printf("listener: got packet from %s\n",
            //inet_ntop(addr_udp.ss_family,
@@ -360,6 +370,12 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
+        
+        if (srvcmd == "LISTSERVERS\n") {
+            
+            cout << "Other server requested a LISTSERVERS" << endl;
+        }
+        
         if (srvcmd == "ID\n") {
             // ### FIRST CASE: CMD, ,GROUP_ID,<COMMAND> ###
             // ### SECOND CASE: CMD,,GROUP_ID<COMMAND> ###
@@ -371,9 +387,9 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
                 strcpy(buffer, "RSP,");
                 strcat(buffer, fromServerID.c_str());
                 strcat(buffer, ",");
-                strcat(buffer, serverID.c_str());
+                strcat(buffer, serverID);
                 strcat(buffer, ",");
-                strcat(buffer, serverID.c_str());
+                strcat(buffer, serverID);
                 strcat(buffer, "\n");
                 cout << buffer << endl;
                 send(user->socketVal, buffer, strlen(buffer), 0);
@@ -457,7 +473,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user) {
     //send the current server id to the user
     else if(command == "ID"){
         bzero(buffer, strlen(buffer));
-        strcpy(buffer, serverID.c_str());
+        strcpy(buffer, serverID);
         send(user->socketVal, buffer, strlen(buffer), 0);
     }
 
@@ -647,7 +663,7 @@ int main(int argc, char* argv[]) {
                     strcpy(message, "CMD,");
                     strcat(message, clients[i]->userName.c_str());
                     strcat(message, ",");
-                    strcat(message, serverID.c_str());
+                    strcat(message, serverID);
                     strcat(message, ",KEEPALIVE\n");
                     send(clients[i]->socketVal, message, strlen(message), 0);
                     cout << "KEEPALIVE MESSAGE SENT" << endl;
@@ -684,7 +700,7 @@ int main(int argc, char* argv[]) {
         //wait for something to happen on some socket. Will wait forever if nothing happens.
         if (select(maxSocketVal + 1, &masterFD, NULL, NULL, &tv) > 0) {
 
-            //if something happens on the listening socket, someone is trying to connet to the server.
+            //if something happens on the listening socket, someone is trying to connect to the server.
             if(FD_ISSET(listeningSock, &masterFD)){
                 
                 newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
@@ -693,9 +709,13 @@ int main(int argc, char* argv[]) {
                 int time = getTime();
                 clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr), time));
 
+                cout << "ip is " << inet_ntoa(cli_addr.sin_addr) << endl;
+                cout << "port is " << htons(cli_addr.sin_port) << endl;
+                
                 cout << "Sending message to other server: ";
 
-                strcpy(message, "CMD,,V_GROUP_15_HLH,ID\n");
+                //strcpy(message, "CMD,,V_GROUP_15_HLH,ID\n");
+                strcpy(message, "LISTSERVERS\n");
                 cout << message << endl;
 
                 send(newSock, message, strlen(message), 0);
