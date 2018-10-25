@@ -18,6 +18,52 @@ void error(const char *msg)
     exit(0);
 }
 
+string addTokens(char* buffer) {
+    char stuffedBuffer[1000];
+    int counter = 0;
+    string tokenString = "";
+    
+    string str = string(buffer);
+    string start = "0x01";
+    string end = "0x04";
+    
+    int pos = str.find(end);
+    
+    while(pos < str.size())
+    {
+        str.insert(pos, end);
+        pos = str.find(end, pos + end.size()*2);
+    }
+    
+    tokenString = start + str + end;
+    return tokenString;
+}
+
+string checkTokens(char* buffer) {
+    string str = string(buffer);
+    
+    //checking for tokens at the beginning and at the end
+    if(str.find("0x01") == 0 && str.compare(str.size() - 4, 4, "0x04") == 0)
+    {
+        //check if the end token also appears somewhere else in the message
+        //if the string has been bitstuffed we should find the end token duplicated
+        //then we have to delete the stuffed token
+        int pos = 0;
+        while(str.find("0x040x04") < str.size())
+        {
+            pos = str.find("0x040x04");
+            str.erase(pos, 4);
+        }
+        str.erase(0, 4);
+        str.erase(str.size() - 4, str.size());
+    }
+    else
+    {
+        return "Tokens not valid";
+    }
+    return str;
+}
+
 bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd, const char* addr){
     
     if (sockfd < 0) {
@@ -46,6 +92,8 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
         return false;
     }
     cout << "Sending loginCommand to server: " << loginCommand << endl;
+    string str = addTokens(loginCommand);
+    strcpy(loginCommand, str.c_str());
     send(sockfd, loginCommand, strlen(loginCommand), 0);
     return true;
 }
@@ -101,7 +149,7 @@ int main(int argc, char *argv[]) {
     
     if(knockOnPort(serv_addr, server, 4023, sockfd, addr)){
         
-        cout << sockfd << endl;
+        //cout << sockfd << endl;
         
         cout << "Here is a list of available commands" << endl << endl;
         cout << "ID                   ::      Set ID of server" << endl;
@@ -124,7 +172,9 @@ int main(int argc, char *argv[]) {
             select(sockfd + 1, &masterFD, NULL, NULL, &time);
             if(FD_ISSET(sockfd, &masterFD)){
                 bzero(buffer, 1000);
-                int bytesRecv = recv(sockfd, buffer, 1000, 0);
+                int bytesRecv = recv(sockfd, buffer, sizeof(buffer), 0);
+                string str = checkTokens(buffer);
+                strcpy(buffer, str.c_str());
                 if(bytesRecv > 0){
                     cout << string(buffer, 0, bytesRecv) << endl;
                 }
@@ -134,10 +184,11 @@ int main(int argc, char *argv[]) {
             select(STDIN_FILENO + 1, &readFD, NULL, NULL, &time);
             if(FD_ISSET(STDIN_FILENO, &readFD)){
                 getline(cin, input);
-                input += "\n";
-                if(input.size() > 0){
-                    send(sockfd, input.c_str(), input.size() + 1, 0);
-                    
+                if(input.size() > 0) {
+                    strcpy(buffer, input.c_str());
+                    string str = addTokens(buffer);
+                    strcpy(buffer, str.c_str());
+                    send(sockfd, buffer, strlen(buffer) + 1, 0);
                 }
                 else{
                     cout << "That's not a valid command" << endl;
