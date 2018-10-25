@@ -334,20 +334,48 @@ void leave(ClientInfo* user, char* buffer){
 //Function to check if the two token characters are in the beginning and end of the buffer, returns a string with the buffer content
 string checkTokens(char* buffer) {
     string str = string(buffer);
-    
-    int sstr = str.size();
-    
-    if((int)str.find("01") == 0 && (int)str.find("04") == sstr - 2)
+
+    //checking for tokens at the beginning and at the end
+    if(str.find("0x01") == 0 && str.compare(str.size() - 4, 4, "0x04") == 0)
     {
-        str.erase(0,2);
-        str.erase(str.end() - 2, str.end());
+        //check if the end token also appears somewhere else in the message
+        //if the string has been bitstuffed we should find the end token duplicated
+        //then we have to delete the stuffed token
+        int pos = 0;
+        while(str.find("0x040x04") < str.size())
+        {
+            pos = str.find("0x040x04");
+            str.erase(pos, 4);
+        }
+        str.erase(0, 4);
+        str.erase(str.size() - 4, str.size());
     }
     else
     {
         return "Tokens not valid";
     }
-    
     return str;
+}
+
+string addTokens(char* buffer) {
+    char stuffedBuffer[1000];
+    int counter = 0;
+    string tokenString = "";
+
+    string str = string(buffer);
+    string start = "0x01";
+    string end = "0x04";
+
+    int pos = str.find(end);
+
+    while(pos < str.size())
+    {
+        str.insert(pos, end);
+        pos = str.find(end, pos + end.size()*2);
+    }
+
+    tokenString = start + str + end;
+    return tokenString;
 }
 
 void connectTo(char* buffer){
