@@ -364,6 +364,7 @@ void connectTo(char* buffer){
 void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, char* localIP){
     
     string ID;
+    string hashNumber;
     if (srvcmd == "LISTSERVERS\n") {
         
         cout << "Other server requested a LISTSERVERS" << endl;
@@ -411,6 +412,35 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
         cout << "Peer sent KEEPALIVE" << endl;
         user->lastRcvKA = getTime();
     }
+    
+    if (srvcmd == "FETCH") {
+        manageBuffer(buffer, hashNumber);
+        strcpy(buffer, "RSP,");
+        strcat(buffer, fromServerID.c_str());
+        strcat(buffer, ",");
+        strcat(buffer, serverID);
+        strcat(buffer, ",");
+        strcat(buffer, "FETCH");
+        strcat(buffer, ",");
+        if (hashNumber == "1\n") {
+            strcat(buffer, "a2d9f117f2dabf294bdabb899e184f9c");
+            
+        }
+        else if (hashNumber == "2\n") {
+            strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
+        }
+        else if (hashNumber == "3\n") {
+            strcat(buffer, "65b50b04a6af50bb2f174db30a8c6dad");
+        }
+        else if (hashNumber == "4\n") {
+            strcat(buffer, "dd22b70914cd2243e055d2e118741186");
+        }
+        else if (hashNumber == "5\n") {
+            strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
+        }
+        strcat(buffer, "\n");
+        send(user->socketVal, buffer, strlen(buffer), 0);
+    }
 }
 
 void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, string fromServerID){
@@ -418,6 +448,7 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
     string ID;
     string IP;
     string tcpport;
+    string hash;
     cout << "toServerID is now: " << toServerID << endl;
     cout << "fromServerID is now: " << fromServerID << endl;
     cout << "srvcmd is now: " << srvcmd << endl;
@@ -443,7 +474,7 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
         
-        
+        // ### If another server sends RPS,V_GROUP_15,fromServerID,LISTSERVES,fromServerID,IP,port - We extract the information about them and add them to our client information.
         if (srvcmd == "LISTSERVERS") {
             
             cout << "User sent their list of servers" << endl;
@@ -459,6 +490,12 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
                     clients[i]->tcpPort = stoi(tcpport);
                 }
             }
+        }
+        
+        if (srvcmd == "FETCH") {
+            manageBuffer(buffer, hash);
+            // ### VISTA HASH Í SKRÁ?
+            cout << "The hash is: " << buffer << endl;
         }
         
     }
@@ -511,9 +548,12 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
 
 void CONNECT(char* buffer, ClientInfo* user){
     if(user->isOurClient){
+        //buffer[sizeof(buffer)] = '\0';
         //set the username
-        buffer[sizeof(buffer)] = '\0';
-        user->userName = string(buffer);
+        string username;
+        buffer[sizeof(buffer)-1] = '\0';
+        manageBuffer(buffer, username);
+        user->userName = username;
         user->hasUsername = true;
         user->tcpPort = 4020;
         
@@ -554,6 +594,7 @@ void WHO(char* buffer, ClientInfo* user){
             strcat(buffer, str.c_str());
         }
     }
+    cout << buffer << endl;
     send(user->socketVal, buffer, strlen(buffer), 0);
 }
 
@@ -654,7 +695,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, char* lo
     }
     
     //send the user a list of clients who are connected
-    else if (command == "WHO" && user->hasUsername) {
+    else if (command == "WHO\n" && user->hasUsername) {
         WHO(buffer, user);
     }
     
