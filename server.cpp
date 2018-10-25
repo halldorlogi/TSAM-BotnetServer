@@ -182,7 +182,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-string listServersReply(char* localIP){
+string listServersReply(char* localIP, string toServerID, string fromServerID){
     string str;
     /*if (clients.size() == 1) {
      str = "Our server list is empty!\n";
@@ -191,7 +191,7 @@ string listServersReply(char* localIP){
     string ip(localIP);
     cout << "Local ip is: " << ip << endl;
     stringstream ss;
-    ss << serverID << "," << ip.c_str() << "," << TCPport << ";";
+    ss << "RSP" << "," << toServerID << "," << fromServerID << "," << serverID << "," << ip.c_str() << "," << TCPport << ";";
     ss >> str;
     str += "\n";
     for(int i = 0 ; i < (int)clients.size() ; i++){
@@ -210,6 +210,25 @@ string listServersReply(char* localIP){
     return str;
 }
 
+string listServersReplyUDP(char* localIP) {
+    string str;
+    string ip(localIP);
+    stringstream ss;
+    ss << serverID << "," << ip.c_str() << "," << TCPport << ";";
+    ss >> str;
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+        ClientInfo* c = clients[i];
+        if((!c->isOurClient)){
+            if(c->hasUsername){
+                str += c->userName;
+            }
+            str += "," + c->peerName + "," + to_string(c->tcpPort) + ";";
+        }
+    }
+    str += "\n";
+    return str;
+}
+
 // ### A FUNCTION TO MAKE SURE WE ONLY SEND OUR SERVER LIST IN CASE OF 'LISTSERVERS' ###
 // ### REFERENCE: BEEJ GUIDE - MAY WANT TO REFACTOR
 bool handleForeignLISTSERVERS(char* UDPBuffer, char* localIP) {
@@ -217,7 +236,7 @@ bool handleForeignLISTSERVERS(char* UDPBuffer, char* localIP) {
     string command;
     manageBuffer(UDPBuffer, command);
     if (command == "LISTSERVERS") {
-        string package = listServersReply(localIP);
+        string package = listServersReplyUDP(localIP);
         bzero(UDPBuffer, strlen(UDPBuffer));
         strcpy(UDPBuffer, package.c_str());
         return true;
@@ -348,7 +367,7 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
     if (srvcmd == "LISTSERVERS\n") {
         
         cout << "Other server requested a LISTSERVERS" << endl;
-        string package = listServersReply(localIP);
+        string package = listServersReply(localIP, toServerID, fromServerID);
         bzero(buffer, strlen(buffer));
         strcpy(buffer, package.c_str());
         cout << "Sending LISTSERVERS via TCP" << endl;
@@ -402,13 +421,13 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
     cout << "toServerID is now: " << toServerID << endl;
     cout << "fromServerID is now: " << fromServerID << endl;
     cout << "srvcmd is now: " << srvcmd << endl;
-    string listservers = fromServerID + "\n";
+    string remoteServer = fromServerID + "\n";
     if (toServerID == serverID) {
-        if (srvcmd == listservers) {
+        // ### If another server sends RSP,V_GROUP_15,fromServerID,fromServerID, we sent LISTSERVERS to them to get their information ###
+        if (srvcmd == remoteServer) {
             cout << "ID RSP received - Sending LISTSERVERS to " << fromServerID << endl;
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "LISTSERVERS\n");
-            // Þurfum að adda þessu ID á listann af clients
             for (int i = 0; i < clients.size(); i++) {
                 if (user->socketVal == clients[i]->socketVal) {
                     clients[i]->userName = fromServerID;
