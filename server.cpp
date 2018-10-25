@@ -28,34 +28,33 @@ using namespace std;
 // ### A CLASS THAT HOLDS INFORMATION ABOUT A CLIENT (OTHER SERVERS)
 class ClientInfo{
 public:
-    int socketVal, udpPort, tcpPort, lastRcvKA;
+    int socketVal, tcpPort, lastRcvKA;
     string peerName;
     string userName;
-    string listServerReply;
+    //string listServerReply;
     bool hasUsername;
-    bool isUser;
+    bool isOurClient;
     
-    //all clients need a peer name                  -- Is this being used at all? --
+    /*//all clients need a peer name                  -- Is this being used at all? --
     ClientInfo(int socketVal, string id){
         hasUsername = true;
-        isUser = false;
+        isOurClient = false;
         peerName = "";
         userName = id;
         this->socketVal = socketVal;
         lastRcvKA = 0;
         tcpPort = 0;
         udpPort = 0;
-    }
+    }*/
     
     ClientInfo(int socketVal, string peerName, int time) {
         hasUsername = false;
-        isUser = false;
+        isOurClient = false;
         this->peerName = peerName;
         userName = "";
         this->socketVal = socketVal;
         lastRcvKA = time;
         tcpPort = 0;
-        udpPort = 0;
     }
     
     ~ClientInfo(){
@@ -66,7 +65,7 @@ public:
 // ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
 vector<ClientInfo*> clients;
 
-/// ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
+// ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
 int getTime(){
     int t = (int)time(0);
     return t;
@@ -76,7 +75,7 @@ int getTime(){
 int stillAliveTime = getTime();
 
 // ### CONNECT TO OTHER SERVER AND ADD THE SERVER INFORMATION TO CLIENTS ###
-void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno, int udpportno) {
+void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno) {
     
     int externalSock = socket(AF_INET, SOCK_STREAM, 0);
     struct hostent *server = gethostbyname(address.c_str());
@@ -92,12 +91,12 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
     
     serv_addr.sin_port = htons(tcpportno);
     if(connect(externalSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
-        cout << "connection to " << server->h_name << " successful" << endl;
+        cout << "Connection to " << server->h_name << " successful" << endl;
         strcpy(message, "CMD,,V_GROUP_15,ID\n");
         send(externalSock, message, strlen(message), 0);
         cout << "serv_addr is now: " << inet_ntop(AF_INET, &(serv_addr.sin_addr), message, 1000) << endl;
         int time = getTime();
-        clients.push_back(new ClientInfo(externalSock, server->h_name, time)); //, tcpportno, udpportno));
+        clients.push_back(new ClientInfo(externalSock, server->h_name, time));
     }
 }
 
@@ -192,7 +191,7 @@ string listServersReply(char* localIP){
     string ip(localIP);
     cout << "Local ip is: " << ip << endl;
     stringstream ss;
-    ss << serverID << "," << ip.c_str() << "," << TCPport << "," UDPport << ";";
+    ss << serverID << "," << ip.c_str() << "," << TCPport << ";";
     ss >> str;
     str += "\n";
     for(int i = 0 ; i < (int)clients.size() ; i++){
@@ -200,11 +199,11 @@ string listServersReply(char* localIP){
         
         // !!!!!!!!! MUNA AÐ BREYTA EFTIR AÐ VIÐ FÖRUM LIVE - Á AÐ VERA '!c->isUser' SVO AÐ CLIENT FARI EKKI Á LISTANN !!!!!!!!
         
-        if((!c->isUser)){
+        if((!c->isOurClient)){
             if(c->hasUsername){
                 str += c->userName;
             }
-            str += "," + c->peerName + "," + to_string(c->tcpPort) + "," + to_string(c->udpPort) + ";";
+            str += "," + c->peerName + "," + to_string(c->tcpPort) + ";";
         }
     }
     str += "\n";
@@ -335,14 +334,12 @@ string checkTokens(char* buffer) {
 void connectTo(char* buffer){
     string address;
     string tcpport;
-    string udpport;
     struct sockaddr_in serv_addr;
     
     manageBuffer(buffer, address);
     manageBuffer(buffer, tcpport);
-    manageBuffer(buffer, udpport);
     bzero((char*)&serv_addr, sizeof(serv_addr));
-    connectToServer(serv_addr, address, stoi(tcpport), stoi(udpport));
+    connectToServer(serv_addr, address, stoi(tcpport));
 }
 
 void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, char* localIP){
@@ -360,12 +357,9 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
     }
     
     if (srvcmd == "ID\n") {
-        // ### FIRST CASE: CMD, ,GROUP_ID,<COMMAND> ###
-        // ### SECOND CASE: CMD,,GROUP_ID<COMMAND> ###
-        // ÞARF MÖGULEGA AÐ LAGA - VILJUM GETA VITAÐ HVORT ER HVAÐ
+    
         if (toServerID == " " || toServerID == fromServerID) {
             cout << fromServerID << " has requested to connect" << endl;
-            cout << "Sending RSP..." << endl;
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "RSP,");
             strcat(buffer, fromServerID.c_str());
@@ -402,29 +396,58 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
 
 void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, string fromServerID){
     
+    string ID;
+    string IP;
+    string tcpport;
     cout << "toServerID is now: " << toServerID << endl;
     cout << "fromServerID is now: " << fromServerID << endl;
+    cout << "srvcmd is now: " << srvcmd << endl;
+    string listservers = fromServerID + "\n";
     if (toServerID == serverID) {
-        cout << "RSP received - Sending LISTSERVERS to " << fromServerID << endl;
-        bzero(buffer, strlen(buffer));
-        strcpy(buffer, "LISTSERVERS\n");
-        // Þurfum að adda þessu ID á listann af clients
-        for (int i = 0; i < clients.size(); i++) {
-            if (user->socketVal == clients[i]->socketVal) {
-                clients[i]->userName = fromServerID;
-                clients[i]->hasUsername = true;
-                cout << "Peer added to list of clients with username: " << fromServerID << endl;
+        if (srvcmd == listservers) {
+            cout << "ID RSP received - Sending LISTSERVERS to " << fromServerID << endl;
+            bzero(buffer, strlen(buffer));
+            strcpy(buffer, "LISTSERVERS\n");
+            // Þurfum að adda þessu ID á listann af clients
+            for (int i = 0; i < clients.size(); i++) {
+                if (user->socketVal == clients[i]->socketVal) {
+                    clients[i]->userName = fromServerID;
+                    clients[i]->hasUsername = true;
+                    cout << "Peer added to list of clients with username: " << fromServerID << endl;
+                }
+            }
+            cout << "Connected users are now: " << endl;
+            for (int i = 0; i < clients.size(); i++) {
+                cout << clients[i]->userName << endl;
+            }
+        
+            send(user->socketVal, buffer, strlen(buffer), 0);
+        }
+        
+        
+        if (srvcmd == "LISTSERVERS") {
+            
+            cout << "User sent their list of servers" << endl;
+            manageBuffer(buffer, ID);
+            cout << "User ID is: " << ID << endl;
+            manageBuffer(buffer, IP);
+            cout << "User IP is: " << IP << endl;
+            manageBuffer(buffer, tcpport);
+            cout << "User TCP port is: " << tcpport << endl;
+            for (int i = 0; i < clients.size(); i++) {
+                if (user->userName == clients[i]->userName) {
+                    clients[i]->peerName = IP;
+                    clients[i]->tcpPort = stoi(tcpport);
+                }
             }
         }
-        cout << "Connected users are now: " << endl;
-        for (int i = 0; i < clients.size(); i++) {
-            cout << clients[i]->userName << endl;
-        }
-        send(user->socketVal, buffer, strlen(buffer), 0);
+        
     }
     else {
         cout << "RSP not for us" << endl;
+        cout << "Action?" << endl;
     }
+
     /*// RSP,
      manageBuffer(buffer, toServerID);
      manageBuffer(buffer, fromServerID);
@@ -468,17 +491,17 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
 }
 
 void CONNECT(char* buffer, ClientInfo* user){
-    if(user->isUser){
+    if(user->isOurClient){
         //set the username
+        buffer[sizeof(buffer)] = '\0';
         user->userName = string(buffer);
         user->hasUsername = true;
         user->tcpPort = 4020;
-        user->udpPort = 4021;
         
         //send the user a confirmation that he is now connected to the server
         strcpy(buffer, "You are now connected to the server as \"");
         strcat(buffer, &user->userName[0]);
-        strcat(buffer, "\"\n");
+        strcat(buffer, "\"");
         send(user->socketVal, buffer, strlen(buffer), 0);
         
         //alert others that this user has connected.
@@ -584,23 +607,6 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, char* lo
     // get the command
     manageBuffer(buffer, command);
     
-    if (command == user->userName) {
-        cout << "User sent their list of servers" << endl;
-        manageBuffer(buffer, IP);
-        cout << "User IP is: " << IP << endl;
-        manageBuffer(buffer, tcpport);
-        cout << "User TCP port is: " << tcpport << endl;
-        manageBuffer(buffer, udpport);
-        cout << "User UDP port is: " << udpport << endl;
-        for (int i = 0; i < clients.size(); i++) {
-            if (user->userName == clients[i]->userName) {
-                clients[i]->peerName = IP;
-                clients[i]->tcpPort = stoi(tcpport);
-                clients[i]->udpPort = stoi(udpport);
-            }
-        }
-    }
-    
     if (command == "connectTo") {
         connectTo(buffer);
     }
@@ -646,7 +652,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, char* lo
     }
     
     else if(command == "V_GROUP_15_I_am_your_father"){
-        user->isUser = true;
+        user->isOurClient = true;
     }
     
     //sends a message to a specific or all users
@@ -701,7 +707,7 @@ int main(int argc, char* argv[]) {
         // ### IF CLIENT HAS NOT SENT 'KEEPALIVE' IN THE LAST 180 SECONDS, DROP THEM ###
         if(clients.size() > 0){
             for(int i = 0 ; i < (int)clients.size() ; i++){
-                if(t - clients[i]->lastRcvKA > MAX_TIME_INTERVAL && !clients[i]->isUser) {
+                if(t - clients[i]->lastRcvKA > MAX_TIME_INTERVAL && !clients[i]->isOurClient) {
                     leave(clients[i], message);
                 }
             }
@@ -710,7 +716,7 @@ int main(int argc, char* argv[]) {
         // ### IF OUR SERVER HAS NOT SENT 'KEEPALIVE' IN 70 SECONDS, SEND 'KEEPALIVE' TO EVERYONE EXCEPT OUR CLIENT
         if (t-stillAliveTime > 70) {
             for(int i = 0; i < (int)clients.size(); i++) {
-                if (!clients[i]->isUser) {
+                if (!clients[i]->isOurClient) {
                     bzero(message, strlen(message));
                     strcpy(message, "CMD,");
                     strcat(message, clients[i]->userName.c_str());
@@ -763,11 +769,11 @@ int main(int argc, char* argv[]) {
                 clients.push_back(new ClientInfo(newSock, inet_ntoa(cli_addr.sin_addr), time));
                 
                 cout << "ip is " << inet_ntoa(cli_addr.sin_addr) << endl;
-                cout << "port is " << htons(cli_addr.sin_port) << endl;
+                /*cout << "port is " << htons(cli_addr.sin_port) << endl;*/
                 
                 cout << "Sending message to other server: ";
                 
-                strcpy(message, "CMD,,V_GROUP_15_HLH,ID\n");
+                strcpy(message, "CMD,,V_GROUP_15,ID\n");
                 cout << message << endl;
                 
                 send(newSock, message, strlen(message), 0);

@@ -126,7 +126,6 @@ int main(int argc, char *argv[]) {
                 bzero(buffer, 1000);
                 int bytesRecv = recv(sockfd, buffer, 1000, 0);
                 if(bytesRecv > 0){
-                    cout << "Message received from server: ";
                     cout << string(buffer, 0, bytesRecv) << endl;
                 }
             }
@@ -135,6 +134,7 @@ int main(int argc, char *argv[]) {
             select(STDIN_FILENO + 1, &readFD, NULL, NULL, &time);
             if(FD_ISSET(STDIN_FILENO, &readFD)){
                 getline(cin, input);
+                input += "\n";
                 if(input.size() > 0){
                     send(sockfd, input.c_str(), input.size() + 1, 0);
                     
