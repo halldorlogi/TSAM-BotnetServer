@@ -19,7 +19,7 @@
 #include <ctime>
 #include <sstream>
 
-#define MAX_TIME_INTERVAL 180
+#define MAX_TIME_INTERVAL 300
 #define serverID "V_GROUP_15"
 
 using namespace std;
@@ -30,6 +30,7 @@ public:
     int socketVal, tcpPort, lastRcvKA;
     string peerName;
     string userName;
+    string ListServers;
     //string listServerReply;
     bool hasUsername;
     bool isOurClient;
@@ -80,8 +81,8 @@ string addTokens(char* buffer) {
     string tokenString = "";
 
     string str = string(buffer);
-    string start = "0x01";
-    string end = "0x04";
+    string start = "\x1";
+    string end = "\x4";
 
     int pos = str.find(end);
 
@@ -92,6 +93,9 @@ string addTokens(char* buffer) {
     }
 
     tokenString = start + str + end;
+    //str.insert(0,1,0x01);
+    //str.append(1,0x04);
+
     return tokenString;
 }
 
@@ -124,6 +128,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
         //cout << "serv_addr is now: " << inet_ntop(AF_INET, &(serv_addr.sin_addr), message, 1000) << endl;
         int time = getTime();
         clients.push_back(new ClientInfo(externalSock, server->h_name, time));
+        clients[clients.size() - 1]->tcpPort = tcpportno;
     }
 }
 
@@ -153,7 +158,7 @@ void manageBuffer(char* buffer, string &firstWord) {
 
     // ### ATH SERVER CRASHAR EF BUFFER ER TÓMUR !!! ###
     string str = string(buffer);
-    char delimit[] = ",";
+    char delimit[] = ",;";
     firstWord = strtok(buffer, delimit);
     str = str.substr(str.find_first_of(delimit)+1);
     strcpy(buffer, str.c_str());
@@ -225,9 +230,8 @@ string listServersReply(string localIP, string toServerID, string fromServerID){
         ClientInfo* c = clients[i];
         if((!c->isOurClient)){
             if(c->hasUsername){
-                str += c->userName;
+                str += c->userName + "," + c->peerName + "," + to_string(c->tcpPort) + ";";
             }
-            str += "," + c->peerName + "," + to_string(c->tcpPort) + ";";
         }
     }
     return str;
@@ -362,26 +366,32 @@ void leave(ClientInfo* user, char* buffer){
 string checkTokens(char* buffer) {
     string str = string(buffer);
 
+    /*if(str[0] == char(1) && str[strlen(buffer)-1] == char(4)){
+        str = str.substr(1, str.size() - 2);
+    }*/
+
+
+
     str.erase(remove(str.begin(), str.end(), '\n'), str.end());
     //checking for tokens at the beginning and at the end
-    if(str.find("0x01") == 0 && str.compare(str.size() - 4, 4, "0x04") == 0)
+    if(str.find("\x1") == 0 && str.compare(str.size() - 1, 1, "\x4") == 0)
     {
         //check if the end token also appears somewhere else in the message
         //if the string has been bitstuffed we should find the end token duplicated
         //then we have to delete the stuffed token
         int pos = 0;
-        while(str.find("0x040x04") < str.size())
+        while(str.find("\x4\x4") < str.size())
         {
-            pos = str.find("0x040x04");
-            str.erase(pos, 4);
+            pos = str.find("\x4\x4");
+            str.erase(pos, 1);
         }
-        str.erase(0, 4);
-        str.erase(str.size() - 4, str.size());
+        str.erase(0, 1);
+        str.erase(str.size() - 1, str.size());
     }
-   /* else
+    else
     {
         return "Tokens not valid";
-    }*/
+    }
     return str;
 }
 
@@ -400,22 +410,24 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
 
     string ID;
     string hashNumber;
-    if (srvcmd == "LISTSERVERS") {
+    if(toServerID.empty() || toServerID == " " ||  toServerID == fromServerID || toServerID == serverID){
+        if (srvcmd == "LISTSERVERS") {
+            cout << "Other server requested a LISTSERVERS" << endl;
+            string package = listServersReply(localIP, toServerID, fromServerID);
+            bzero(buffer, strlen(buffer));
+            strcpy(buffer, "RSP,");
+            strcat(buffer, fromServerID.c_str());
+            strcat(buffer, ",");
+            strcat(buffer, serverID);
+            strcat(buffer, ",LISTSERVERS,");
+            strcat(buffer, package.c_str());
+            cout << "Sending LISTSERVERS via TCP" << endl;
+            string str = addTokens(buffer);
+            strcpy(buffer, str.c_str());
+            send(user->socketVal, buffer, strlen(buffer), 0);
+        }
+        if (srvcmd == "ID}") {
 
-        cout << "Other server requested a LISTSERVERS" << endl;
-        string package = listServersReply(localIP, toServerID, fromServerID);
-        bzero(buffer, strlen(buffer));
-        strcpy(buffer, package.c_str());
-        cout << "Sending LISTSERVERS via TCP" << endl;
-        string str = addTokens(buffer);
-        strcpy(buffer, str.c_str());
-        send(user->socketVal, buffer, strlen(buffer), 0);
-
-    }
-
-    if (srvcmd == "ID}") {
-
-        if (toServerID.empty() || toServerID == " " ||  toServerID == fromServerID || toServerID == serverID) {
             cout << fromServerID << " has requested to connect" << endl;
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "RSP,");
@@ -426,56 +438,65 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
             strcat(buffer, serverID);
             strcat(buffer, ",130.208.243.61,");
             strcat(buffer, cTCP);
-            cout << buffer << endl;
+            cout << "sending: "<< buffer << endl;
             string str = addTokens(buffer);
             strcpy(buffer, str.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
+        if (srvcmd == "FETCH") {
+            manageBuffer(buffer, hashNumber);
+            strcpy(buffer, "RSP,");
+            strcat(buffer, fromServerID.c_str());
+            strcat(buffer, ",");
+            strcat(buffer, serverID);
+            strcat(buffer, ",");
+            strcat(buffer, "FETCH");
+            strcat(buffer, ",");
+            if (hashNumber == "1") {
+                strcat(buffer, "a2d9f117f2dabf294bdabb899e184f9c");
+            }
+            else if (hashNumber == "2") {
+                strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
+            }
+            else if (hashNumber == "3") {
+                strcat(buffer, "65b50b04a6af50bb2f174db30a8c6dad");
+            }
+            else if (hashNumber == "4") {
+                strcat(buffer, "dd22b70914cd2243e055d2e118741186");
+            }
+            else if (hashNumber == "5") {
+                strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
+            }
+            string str = addTokens(buffer);
+            strcpy(buffer, str.c_str());
+            cout << "sending: "<< buffer << endl;
+            send(user->socketVal, buffer, strlen(buffer), 0);
+        }
+        if(srvcmd == "LISTROUTES"){
+            strcpy(buffer, "RSP,");
+            strcat(buffer, fromServerID.c_str());
+            strcat(buffer, ",");
+            strcat(buffer, serverID);
+            strcat(buffer, ",");
+            strcat(buffer, "LISTROUTES,notImplementedYet");
+            send(user->socketVal, buffer, strlen(buffer), 0);
+        }
+    }
 
-        else if(fromServerID == serverID) {
-            for(int i = 0 ; i < (int)clients.size() ; i++){
-                if(toServerID == clients[i]->userName){
-                    string str = addTokens(buffer);
-                    strcpy(buffer, str.c_str());
-                    cout << "sending: " << buffer << endl;
-                    send(clients[i]->socketVal, buffer, strlen(buffer), 0);
-                }
+    else if(fromServerID == serverID) {
+        for(int i = 0 ; i < (int)clients.size() ; i++){
+            if(toServerID == clients[i]->userName){
+                string str = addTokens(buffer);
+                strcpy(buffer, str.c_str());
+                cout << "sending: " << buffer << endl;
+                send(clients[i]->socketVal, buffer, strlen(buffer), 0);
             }
         }
     }
 
-    if (srvcmd.compare("KEEPALIVE") == 0) {
+    if (srvcmd == "KEEPALIVE") {
         cout << "Peer sent KEEPALIVE" << endl;
         user->lastRcvKA = getTime();
-    }
-
-    if (srvcmd == "FETCH") {
-        manageBuffer(buffer, hashNumber);
-        strcpy(buffer, "RSP,");
-        strcat(buffer, fromServerID.c_str());
-        strcat(buffer, ",");
-        strcat(buffer, serverID);
-        strcat(buffer, ",");
-        strcat(buffer, "FETCH");
-        strcat(buffer, ",");
-        if (hashNumber == "1") {
-            strcat(buffer, "a2d9f117f2dabf294bdabb899e184f9c");
-        }
-        else if (hashNumber == "2") {
-            strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
-        }
-        else if (hashNumber == "3") {
-            strcat(buffer, "65b50b04a6af50bb2f174db30a8c6dad");
-        }
-        else if (hashNumber == "4") {
-            strcat(buffer, "dd22b70914cd2243e055d2e118741186");
-        }
-        else if (hashNumber == "5") {
-            strcat(buffer, "8fc42c6ddf9966db3b09e84365034357");
-        }
-        string str = addTokens(buffer);
-        strcpy(buffer, str.c_str());
-        send(user->socketVal, buffer, strlen(buffer), 0);
     }
 }
 
@@ -489,6 +510,9 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
     if (toServerID == serverID) {
         // ### If another server sends RSP,V_GROUP_15,fromServerID,fromServerID, we sent LISTSERVERS to them to get their information ###
         if (srvcmd == "ID") {
+            manageBuffer(buffer, ID);
+            manageBuffer(buffer, IP);
+            manageBuffer(buffer, tcpport);
             cout << "ID RSP received - Sending LISTSERVERS to " << fromServerID << endl;
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "CMD");
@@ -498,13 +522,13 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
             strcat(buffer, toServerID.c_str());
             strcat(buffer, ",");
             strcat(buffer, "LISTSERVERS");
-            for (int i = 0; i < (int)clients.size(); i++) {
-                if (user->socketVal == clients[i]->socketVal) {
-                    clients[i]->userName = fromServerID;
-                    clients[i]->hasUsername = true;
-                    cout << "Peer added to list of clients with username: " << fromServerID << endl;
-                }
-            }
+
+            user->userName = fromServerID;
+            user->hasUsername = true;
+            user->peerName = IP;
+            user->tcpPort = atoi(tcpport.c_str());
+
+            cout << "Peer added to list of clients with username: " << fromServerID << endl;
             cout << "Connected users are now: " << endl;
             for (int i = 0; i < (int)clients.size(); i++) {
                 cout << clients[i]->userName << endl;
@@ -516,21 +540,16 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
         }
 
         // ### If another server sends RPS,V_GROUP_15,fromServerID,LISTSERVES,fromServerID,IP,port - We extract the information about them and add them to our client information.
-        if (srvcmd == "LISTSERVERS") {
+        else if (srvcmd == "LISTSERVERS") {
 
-            cout << "User sent their list of servers" << endl;
-            manageBuffer(buffer, ID);
+            cout << "User sent their list of servers: " << buffer << endl;
+            /*manageBuffer(buffer, ID);
             cout << "User ID is: " << ID << endl;
             manageBuffer(buffer, IP);
             cout << "User IP is: " << IP << endl;
             manageBuffer(buffer, tcpport);
-            cout << "User TCP port is: " << tcpport << endl;
-            for (int i = 0; i < (int)clients.size(); i++) {
-                if (user->userName == clients[i]->userName) {
-                    clients[i]->peerName = IP;
-                    clients[i]->tcpPort = stoi(tcpport);
-                }
-            }
+            cout << "User TCP port is: " << tcpport << endl;*/
+            user->ListServers = string(buffer);
         }
 
         if (srvcmd == "FETCH") {
@@ -538,53 +557,21 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
             // ### VISTA HASH Í SKRÁ?
             cout << "The hash is: " << buffer << endl;
         }
-
+    }
+    else if(fromServerID == serverID){
+        for(int i = 0 ; i < (int)clients.size() ; i++){
+            if(toServerID == clients[i]->userName){
+                string str = addTokens(buffer);
+                strcpy(buffer, str.c_str());
+                cout << "sending: " << buffer << endl;
+                send(clients[i]->socketVal, buffer, strlen(buffer), 0);
+            }
+        }
     }
     else {
         cout << "RSP not for us" << endl;
         cout << "Action?" << endl;
     }
-
-    /*// RSP,
-     manageBuffer(buffer, toServerID);
-     manageBuffer(buffer, fromServerID);
-     manageBuffer(buffer, srvcmd);
-
-     if(toServerID == serverID){
-     if(!user->hasUsername){
-     bool fromThisServer = true;
-     for(int i = 0 ; (int)clients.size() ; i++){
-     if(clients[i]->userName.compare(fromServerID) == 0){
-     ///We DON'T know the serverID of the socket who sent us the RSP but we DO know the server who originally sent it
-     fromServerID = false;
-     break;
-     }
-     }
-     if(fromThisServer == true){
-     ///We DON'T know the serverID of this socket and we DON't know any server of this name. This must be this socket's serverID
-     user->userName = fromServerID;
-     user->hasUsername = true;
-     }
-     }
-     else{
-     if(user->userName.compare(fromServerID) == 0){
-     ///we DO know the serverID of this socket and it IS from that server
-     }
-     else{
-     bool fromKnownServer = false;
-     for(int i = 0 ; (int)clients.size() ; i++){
-     if(clients[i]->userName.compare(fromServerID) == 0){
-     ///the RSP is sent from another server we DO know
-     fromKnownServer = true;
-     }
-     }
-     if(fromKnownServer == false){
-     ///This RSP is from a server we DON'T know.
-     }
-     }
-     }
-     }
-     cout << "Response received: " << srvcmd << endl;*/
 }
 
 void CONNECT(char* buffer, ClientInfo* user){
@@ -628,13 +615,16 @@ void ID(char* buffer, ClientInfo* user){
 void WHO(char* buffer, ClientInfo* user){
     bzero(buffer, strlen(buffer));
     //add users who have a username (and are therefore connected) to the buffer
+    string numberofservers = "There are " + to_string(clients.size() - 1) + "servers connected to our server;";
+    strcpy(buffer, numberofservers.c_str());
+
     for (int i = 0; i < (int)clients.size(); i++) {
         if(clients[i]->hasUsername){
             stringstream ss;
             ss << (i + 1);
             string number;
             ss >> number;
-            string str = "User " + number + ": " + clients[i]->userName;
+            string str = "User " + number + ": " + clients[i]->userName + ";";
             strcat(buffer, str.c_str());
         }
     }
@@ -722,15 +712,18 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
     if (command == "connectTo") {
         connectTo(buffer);
     }
+    if (command == "KEEPALIVE"){
+        cout << "Peer sent KEEPALIVE" << endl;
+        user->lastRcvKA = getTime();
+    }
 
-    if (command == "CMD" || command == "RSP") {
+    if (command == "CMD"|| command == "RSP") {
 
         manageBuffer(buffer, toServerID);
         manageBuffer(buffer, fromServerID);
         manageBuffer(buffer, srvcmd);
 
         if(command != "RSP"){
-	    cout << "going to command" << endl;
             CMD(buffer, user, srvcmd, toServerID, fromServerID, localIP);
         }
         else{
@@ -780,6 +773,7 @@ int main(int argc, char* argv[]) {
     int listeningSock, UDPsock, newSock, messageCheck, socketVal, maxSocketVal;
     struct sockaddr_in serv_addr, cli_addr;
     struct sockaddr_storage addr_udp;
+    struct timeval tv;
     socklen_t cli_addrlen, udp_addrlen;
     //TCPport = 4023;
     //UDPport = 4024;
@@ -871,7 +865,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        timeval tv;
         tv.tv_sec = 5;
         tv.tv_usec = 0;
 
@@ -893,7 +886,7 @@ int main(int argc, char* argv[]) {
 
                 cout << "Sending message to other server: ";
                 strcpy(message, "CMD,,V_GROUP_15,ID");
-                cout << message << endl;
+                //cout << message << endl;
                 string str = addTokens(message);
                 strcpy(message, str.c_str());
                 cout << "sending: " << message << endl;
@@ -915,10 +908,8 @@ int main(int argc, char* argv[]) {
                     messageCheck = read(socketVal, message, sizeof(message));
                     message[messageCheck] = '\0';
                     if(messageCheck != 0){
-                        cout << message << endl;
                         string str = checkTokens(message);
                         strcpy(message, str.c_str());
-			cout << message << endl;
                         handleConnection(message, messageCheck, clients[i], localIP);
                     }
 
