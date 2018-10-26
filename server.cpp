@@ -24,6 +24,19 @@
 
 using namespace std;
 
+class ShortClientInfo{
+public:
+    string ID;
+    vector<string> has1HopTo;
+
+    ShortClientInfo(string ID){
+        this->ID = ID;
+    }
+    ~ShortClientInfo(){
+
+    }
+};
+
 // ### A CLASS THAT HOLDS INFORMATION ABOUT A CLIENT (OTHER SERVERS)
 class ClientInfo{
 public:
@@ -31,21 +44,9 @@ public:
     string peerName;
     string userName;
     string ListServers;
-    //string listServerReply;
     bool hasUsername;
     bool isOurClient;
-
-    /*//all clients need a peer name                  -- Is this being used at all? --
-    ClientInfo(int socketVal, string id){
-        hasUsername = true;
-        isOurClient = false;
-        peerName = "";
-        userName = id;
-        this->socketVal = socketVal;
-        lastRcvKA = 0;
-        tcpPort = 0;
-        udpPort = 0;
-    }*/
+    vector<string> hasRouteTo;
 
     ClientInfo(int socketVal, string peerName, int time) {
         hasUsername = false;
@@ -58,16 +59,26 @@ public:
     }
 
     ~ClientInfo(){
-
     }
 };
 
 // ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
 vector<ClientInfo*> clients;
+vector<ShortClientInfo*> shortClients;
 int TCPport, UDPport;
 const char* cTCP;
 const char* cUDP;
 string localIP = "130.208.243.61";
+
+int manageShort(string ID){
+    for(int i = 0 ; i < (int)shortClients.size() ; i++){
+        if(ID == shortClients[i]->ID){
+            return i;
+        }
+    }
+    shortClients.push_back(new ShortClientInfo(ID));
+    return shortClients.size() -1;
+}
 
 // ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
 int getTime(){
@@ -158,7 +169,7 @@ void manageBuffer(char* buffer, string &firstWord) {
 
     // ### ATH SERVER CRASHAR EF BUFFER ER TÓMUR !!! ###
     string str = string(buffer);
-    char delimit[] = ",;";
+    char delimit[] = ",";
     firstWord = strtok(buffer, delimit);
     str = str.substr(str.find_first_of(delimit)+1);
     strcpy(buffer, str.c_str());
@@ -237,9 +248,8 @@ string listServersReply(string localIP, string toServerID, string fromServerID){
     return str;
 }
 
-string listServersReplyUDP(string localIP) {
+string listServersReplyUDP() {
     string str;
-    string ip(localIP);
     stringstream ss;
     //ss << serverID << "," << ip.c_str() << "," << TCPport << ";";
     //ss << serverID << "," << "130.208.243.61" << "," << TCPport << ";";
@@ -248,9 +258,8 @@ string listServersReplyUDP(string localIP) {
         ClientInfo* c = clients[i];
         if((!c->isOurClient)){
             if(c->hasUsername){
-                str += c->userName;
+                str += c->userName + "," + c->peerName + "," + to_string(c->tcpPort) + ";";
             }
-            str += "," + c->peerName + "," + to_string(c->tcpPort) + ";";
         }
     }
     return str;
@@ -263,7 +272,7 @@ void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
     string command;
     manageBuffer(UDPBuffer, command);
     //if (command == "LISTSERVERS") {
-        string package = listServersReplyUDP(localIP);
+        string package = listServersReplyUDP();
         bzero(UDPBuffer, strlen(UDPBuffer));
         strcpy(UDPBuffer, package.c_str());
         //return true;
@@ -406,7 +415,7 @@ void connectTo(char* buffer){
     connectToServer(serv_addr, address, stoi(tcpport));
 }
 
-void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
+void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
 
     string ID;
     string hashNumber;
@@ -486,6 +495,7 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
     else if(fromServerID == serverID) {
         for(int i = 0 ; i < (int)clients.size() ; i++){
             if(toServerID == clients[i]->userName){
+                strcpy(buffer, originalBuffer.c_str());
                 string str = addTokens(buffer);
                 strcpy(buffer, str.c_str());
                 cout << "sending: " << buffer << endl;
@@ -500,7 +510,7 @@ void CMD(char* buffer, ClientInfo* &user, string srvcmd, string toServerID, stri
     }
 }
 
-void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, string fromServerID){
+void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, string toServerID, string fromServerID){
 
     string ID;
     string IP;
@@ -510,6 +520,7 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
     if (toServerID == serverID) {
         // ### If another server sends RSP,V_GROUP_15,fromServerID,fromServerID, we sent LISTSERVERS to them to get their information ###
         if (srvcmd == "ID") {
+
             manageBuffer(buffer, ID);
             manageBuffer(buffer, IP);
             manageBuffer(buffer, tcpport);
@@ -525,8 +536,13 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
 
             user->userName = fromServerID;
             user->hasUsername = true;
-            user->peerName = IP;
-            user->tcpPort = atoi(tcpport.c_str());
+            if(ID != IP){
+                user->peerName = IP;
+
+                if(ID != tcpport){
+                    user->tcpPort = atoi(tcpport.c_str());
+                }
+            }
 
             cout << "Peer added to list of clients with username: " << fromServerID << endl;
             cout << "Connected users are now: " << endl;
@@ -541,7 +557,7 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
 
         // ### If another server sends RPS,V_GROUP_15,fromServerID,LISTSERVES,fromServerID,IP,port - We extract the information about them and add them to our client information.
         else if (srvcmd == "LISTSERVERS") {
-
+            string serv;
             cout << "User sent their list of servers: " << buffer << endl;
             /*manageBuffer(buffer, ID);
             cout << "User ID is: " << ID << endl;
@@ -550,6 +566,18 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
             manageBuffer(buffer, tcpport);
             cout << "User TCP port is: " << tcpport << endl;*/
             user->ListServers = string(buffer);
+
+            int shortIndex = manageShort(user->userName);
+            shortClients[shortIndex]->has1HopTo.clear();
+
+            stringstream ss(buffer);
+            while(getline(ss, serv, ';')){
+                int pos = serv.find_first_of(",",0);
+                serv = serv.substr(0,pos);
+                user->hasRouteTo.push_back(serv);
+                shortClients[shortIndex]->has1HopTo.push_back(serv);
+                cout << serv << endl;
+            }
         }
 
         if (srvcmd == "FETCH") {
@@ -561,6 +589,7 @@ void RSP(char* buffer, ClientInfo* user, string srvcmd, string toServerID, strin
     else if(fromServerID == serverID){
         for(int i = 0 ; i < (int)clients.size() ; i++){
             if(toServerID == clients[i]->userName){
+                strcpy(buffer, originalBuffer.c_str());
                 string str = addTokens(buffer);
                 strcpy(buffer, str.c_str());
                 cout << "sending: " << buffer << endl;
@@ -705,6 +734,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
     string IP;
     string tcpport;
     string udpport;
+    string originalBuffer = string(buffer);
 
     // get the command
     manageBuffer(buffer, command);
@@ -724,10 +754,10 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         manageBuffer(buffer, srvcmd);
 
         if(command != "RSP"){
-            CMD(buffer, user, srvcmd, toServerID, fromServerID, localIP);
+            CMD(originalBuffer, buffer, user, srvcmd, toServerID, fromServerID, localIP);
         }
         else{
-            RSP(buffer, user, srvcmd, toServerID, fromServerID);
+            RSP(originalBuffer, buffer, user, srvcmd, toServerID, fromServerID);
         }
     }
 
@@ -852,7 +882,7 @@ int main(int argc, char* argv[]) {
         FD_SET(listeningSock, &masterFD);
         FD_SET(UDPsock, &masterFD);
 
-        maxSocketVal = listeningSock;
+        maxSocketVal = UDPsock;
 
         //add active sockets to set
         for(int i = 0 ; i < (int)clients.size() ; i++){
