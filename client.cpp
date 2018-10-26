@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
     
     
     
-    if(knockOnPort(serv_addr, server, 4023, sockfd, addr)){
+    if(knockOnPort(serv_addr, server, atoi(argv[2]), sockfd, addr)){
         
         //cout << sockfd << endl;
         
