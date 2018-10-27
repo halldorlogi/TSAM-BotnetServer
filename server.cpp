@@ -597,9 +597,22 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             }
         }
     }
+    // ### If the RSP is not for us, we try to find who it is for and forward it
     else {
-        cout << "RSP not for us" << endl;
-        cout << "Action?" << endl;
+        for (int i = 0; i < (int)clients.size(); i++) {
+            if (toServerID == clients[i]->userName) {
+                send(clients[i]->socketVal, buffer, strlen(buffer), 0);
+            }
+            else {
+                for (int j = 0; j < (int)clients[i]->hasRouteTo.size(); j++) {
+                    if (toServerID == clients[i]->hasRouteTo[j]) {
+                        send(clients[i]->socketVal, buffer, strlen(buffer), 0);
+                    }
+                }
+            }
+        }
+        //cout << "RSP not for us" << endl;
+        //cout << "Action?" << endl;
     }
 }
 
