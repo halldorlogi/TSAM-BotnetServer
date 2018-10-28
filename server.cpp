@@ -438,13 +438,13 @@ string LISTROUTES(){
     vector<ShortClientInfo*> c;
 
     for(int i = 0 ; i < (int)clients.size() ; i++){
-        if(clients[i]->hasUsername){
+        if(clients[i]->hasUsername && !clients[i]->isOurClient){
             c.push_back(new ShortClientInfo(clients[i]->userName, ourID));
         }
     }
     for(int i = 0 ; i < (int)clients.size() ; i++){
 
-        if(clients[i]->hasUsername){
+        if(clients[i]->hasUsername && !clients[i]->isOurClient){
 
             for(int j = 0 ; j < (int)clients[i]->hasRouteTo.size() ; j++){
 
@@ -545,6 +545,8 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             strcat(buffer, serverID);
             strcat(buffer, ",");
             strcat(buffer, routes.c_str());
+            string buff = addTokens(buffer);
+            strcpy(buffer, buff.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
     }
@@ -815,6 +817,8 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         }
         else{
             strcpy(buffer, "Server is full");
+            string buff = addTokens(buffer);
+            strcpy(buffer, buff.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
     }
@@ -826,6 +830,8 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
     if(command == "LISTROUTES"){
         string routes = LISTROUTES();
         strcpy(buffer, routes.c_str());
+        string buff = addTokens(buffer);
+        strcpy(buffer, buff.c_str());
         send(user->socketVal, buffer, strlen(buffer), 0);
     }
 
@@ -932,6 +938,9 @@ int main(int argc, char* argv[]) {
         if(clients.size() > 0){
             for(int i = 0 ; i < (int)clients.size() ; i++){
                 if(t - clients[i]->lastRcvKA > MAX_TIME_INTERVAL && !clients[i]->isOurClient) {
+                    leave(clients[i], message);
+                }
+                else if(t - clients[i]->lastRcvKA  > 10 && !clients[i]->hasUsername && !clients[i]->isOurClient){
                     leave(clients[i], message);
                 }
             }
