@@ -27,11 +27,11 @@ using namespace std;
 class ShortClientInfo{
 public:
     string ID;
-    vector<string> has1HopTo;
-    int distance;
+    string through;
 
-    ShortClientInfo(string ID){
+    ShortClientInfo(string ID, string through){
         this->ID = ID;
+        this->through = through;
     }
     ~ShortClientInfo(){
 
@@ -65,13 +65,13 @@ public:
 
 // ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
 vector<ClientInfo*> clients;
-vector<ShortClientInfo*> shortClients;
+//vector<ShortClientInfo*> shortClients;
 int TCPport, UDPport;
 const char* cTCP;
 const char* cUDP;
 string localIP = "130.208.243.61";
 
-int manageShort(string ID){
+/*int manageShort(string ID){
     for(int i = 0 ; i < (int)shortClients.size() ; i++){
         if(ID == shortClients[i]->ID){
             return i;
@@ -79,7 +79,7 @@ int manageShort(string ID){
     }
     shortClients.push_back(new ShortClientInfo(ID));
     return shortClients.size() -1;
-}
+}*/
 
 // ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
 int getTime(){
@@ -431,6 +431,46 @@ void connectTo(char* buffer){
     connectToServer(serv_addr, address, stoi(tcpport));
 }
 
+string LISTROUTES(){
+    ///I tried, I really tried with dijkstra's algorithm and shit but nothing worked... so, our LISTROUTES doesn't show more than 2 hops
+    string ourID = string(serverID);
+    string table = ourID + ";";
+    vector<ShortClientInfo*> c;
+
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+        if(clients[i]->hasUsername){
+            c.push_back(new ShortClientInfo(clients[i]->userName, ourID));
+        }
+    }
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+
+        if(clients[i]->hasUsername){
+
+            for(int j = 0 ; j < (int)clients[i]->hasRouteTo.size() ; j++){
+
+                bool skip = false;
+                for(int k = 0 ; k < (int)c.size() ; k++){
+                    if(c[k]->ID == clients[i]->hasRouteTo[j] && c[k]->through == ourID){
+                        skip = true;
+                        break;
+                    }
+                }
+                if(skip == false){
+                    c.push_back(new ShortClientInfo(clients[i]->hasRouteTo[j], clients[i]->userName));
+                }
+            }
+        }
+    }
+
+    for(int i = 0 ; i < (int)c.size() ; i++){
+        table += c[i]->ID + ":" + c[i]->through + ";";
+    }
+    table += getReadableTime();
+
+    return table;
+}
+
+
 void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
 
     string ID;
@@ -498,12 +538,13 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
         if(srvcmd == "LISTROUTES"){
+            string routes = LISTROUTES();
             strcpy(buffer, "RSP,");
             strcat(buffer, fromServerID.c_str());
             strcat(buffer, ",");
             strcat(buffer, serverID);
             strcat(buffer, ",");
-            strcat(buffer, "LISTROUTES,notImplementedYet");
+            strcat(buffer, routes.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
     }
@@ -583,15 +624,15 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             cout << "User TCP port is: " << tcpport << endl;*/
             user->ListServers = string(buffer);
 
-            int shortIndex = manageShort(user->userName);
-            shortClients[shortIndex]->has1HopTo.clear();
+            //int shortIndex = manageShort(user->userName);
+            //shortClients[shortIndex]->has1HopTo.clear();
 
             stringstream ss(buffer);
             while(getline(ss, serv, ';')){
                 int pos = serv.find_first_of(",",0);
                 serv = serv.substr(0,pos);
                 user->hasRouteTo.push_back(serv);
-                shortClients[shortIndex]->has1HopTo.push_back(serv);
+              //  shortClients[shortIndex]->has1HopTo.push_back(serv);
                 cout << serv << endl;
             }
         }
@@ -630,19 +671,6 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
         //cout << "RSP not for us" << endl;
         //cout << "Action?" << endl;
     }
-}
-
-string LISTROUTES(){
-    ///oh boy, here we go
-    /*for(int i = 0 ; i < clients.size() ; i++){
-        if(clients[i]->hasUsername && !clients[i]->isOurClient){
-            int index = manageShort(clients[i]->userName);
-            shortClients[index]->distance = 1;
-        }
-    }*/
-
-
-
 }
 
 void CONNECT(char* buffer, ClientInfo* user){
@@ -795,6 +823,12 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         user->lastRcvKA = getTime();
     }
 
+    if(command == "LISTROUTES"){
+        string routes = LISTROUTES();
+        strcpy(buffer, routes.c_str());
+        send(user->socketVal, buffer, strlen(buffer), 0);
+    }
+
     if (command == "CMD"|| command == "RSP") {
 
         manageBuffer(buffer, toServerID);
@@ -930,7 +964,7 @@ int main(int argc, char* argv[]) {
         FD_SET(listeningSock, &masterFD);
         FD_SET(UDPsock, &masterFD);
 
-        maxSocketVal = UDPsock;
+        maxSocketVal = listeningSock;
 
         //add active sockets to set
         for(int i = 0 ; i < (int)clients.size() ; i++){
