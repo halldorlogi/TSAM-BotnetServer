@@ -40,7 +40,7 @@ string addTokens(char* buffer) {
     }
 
     tokenString = start + str + end;
-    return tokenString;
+    return token;
 }
 
 string checkTokens(char* buffer) {

@@ -28,6 +28,7 @@ class ShortClientInfo{
 public:
     string ID;
     vector<string> has1HopTo;
+    int distance;
 
     ShortClientInfo(string ID){
         this->ID = ID;
@@ -265,6 +266,21 @@ string listServersReplyUDP() {
     return str;
 }
 
+bool isFull(){
+    int counter = 0;
+    for(int i = 0 ; i < (int)clients.size() ; i++){
+        if(!clients[i]->isOurClient){
+            counter++;
+        }
+    }
+    if(counter >= 5){
+        return true;
+    }
+    else{
+        return false;
+    }
+}
+
 // ### A FUNCTION TO MAKE SURE WE ONLY SEND OUR SERVER LIST IN CASE OF 'LISTSERVERS' ###
 // ### REFERENCE: BEEJ GUIDE - MAY WANT TO REFACTOR
 void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
@@ -297,7 +313,7 @@ void listenForUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen
     cout << UDPBuffer << endl;
 
     // NOT REALLY SURE WHY -1 WORKS, USED TO BE JUST UDPBuffer[numbytes]
-    UDPBuffer[numbytes-1] = '\0';
+    UDPBuffer[numbytes] = '\0';
 
     handleForeignLISTSERVERS(UDPBuffer, localIP);
         cout << "Replying to LISTSERVERS command from UDP ! " << endl;
@@ -603,6 +619,19 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
     }
 }
 
+string LISTROUTES(){
+    ///oh boy, here we go
+    /*for(int i = 0 ; i < clients.size() ; i++){
+        if(clients[i]->hasUsername && !clients[i]->isOurClient){
+            int index = manageShort(clients[i]->userName);
+            shortClients[index]->distance = 1;
+        }
+    }*/
+
+
+
+}
+
 void CONNECT(char* buffer, ClientInfo* user){
     if(user->isOurClient){
         //buffer[sizeof(buffer)] = '\0';
@@ -740,7 +769,13 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
     manageBuffer(buffer, command);
 
     if (command == "connectTo") {
-        connectTo(buffer);
+        if(!isFull()){
+            connectTo(buffer);
+        }
+        else{
+            strcpy(buffer, "Server is full");
+            send(user->socketVal, buffer, strlen(buffer), 0);
+        }
     }
     if (command == "KEEPALIVE"){
         cout << "Peer sent KEEPALIVE" << endl;
@@ -902,7 +937,7 @@ int main(int argc, char* argv[]) {
         if (select(maxSocketVal + 1, &masterFD, NULL, NULL, &tv) > 0) {
 
             //if something happens on the listening socket, someone is trying to connect to the server.
-            if(FD_ISSET(listeningSock, &masterFD)){
+            if(FD_ISSET(listeningSock, &masterFD) && !isFull()){
 
                 newSock = accept(listeningSock, (struct sockaddr *)&cli_addr, (socklen_t *)&cli_addrlen);
                 validateSocket(newSock);
