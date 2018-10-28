@@ -598,7 +598,10 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
 
         if (srvcmd == "FETCH") {
             manageBuffer(buffer, hash);
-            // ### VISTA HASH Í SKRÁ?
+            ofstream hashFile;
+            hashFile.open("hashes.txt");
+            hashFile << buffer;
+            hashFile.close();
             cout << "The hash is: " << buffer << endl;
         }
     }
@@ -627,8 +630,6 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
                 }
             }
         }
-        //cout << "RSP not for us" << endl;
-        //cout << "Action?" << endl;
     }
 }
 
