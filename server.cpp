@@ -25,7 +25,7 @@
 using namespace std;
 
 
-//A CLASS TO USE IN ISTROUTES
+// ** A CLASS TO USE IN LISTROUTES ** //
 class ShortClientInfo{
 public:
     string ID;
@@ -40,7 +40,7 @@ public:
     }
 };
 
-// ### A CLASS THAT HOLDS INFORMATION ABOUT A CLIENT (OTHER SERVERS)
+// ** A CLASS THAT HOLDS INFORMATION ABOUT A CLIENT (OTHER SERVERS) ** //
 class ClientInfo{
 public:
     int socketVal, tcpPort, lastRcvKA;
@@ -65,26 +65,28 @@ public:
     }
 };
 
-// ### A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ###
+// ** A CONTAINER FOR SUCCESSFULLY CONNECTED SERVER CLIENTS ** //
 vector<ClientInfo*> clients;
-// ### THIS SERVER'S PORT NUMBERS. INITIALIZED IN MAIN
+// ** THIS SERVER'S PORT NUMBERS. INITIALIZED IN MAIN ** //
 int TCPport, UDPport;
-// ### PORT NUMBER SIN CHAR FORM
+// ** PORT NUMBER SIN CHAR FORM ** //
 const char* cTCP;
 const char* cUDP;
-// ### IP ADDRESS OF SKEL.RU.IS
+
+// ############### DO WE WANT THIS HARDCODED???? ############################################ //
+// ** IP ADDRESS OF SKEL.RU.IS ** //
 string localIP = "130.208.243.61";
-// ### TIME SINCE LAST KEEPALIVE SENT
+// ** TIME SINCE LAST KEEPALIVE SENT ** //
 int stillAliveTime;
 
 
-// ### GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ###
+// ** GET ELAPSED TIME SINCE 00:00 JAN 1. 1970 IN MS ** //
 int getTime(){
     int t = (int)time(0);
     return t;
 }
 
-// ### ADD THE SOH AND EOT TOKENS TO THE BUFFER AND BITSTUFFING IF NESSECARY
+// ** ADD THE SOH AND EOT TOKENS TO THE BUFFER AND BITSTUFFING IF NECESSARY ** //
 string addTokens(char* buffer) {
 
     string tokenString = "";
@@ -107,7 +109,7 @@ string addTokens(char* buffer) {
 
 
 
-// ### ATTEMPT TO CONNECT TO OTHER SERVER AND ADD THE SERVER INFORMATION TO CLIENTS ###
+// ** ATTEMPT TO CONNECT TO OTHER SERVER AND ADD THE SERVER'S INFORMATION TO CLIENTS ** //
 void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno) {
 
     int externalSock = socket(AF_INET, SOCK_STREAM, 0);
@@ -140,7 +142,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
     }
 }
 
-// ### CHECKS IF SOCKET IS VALID
+// ** CHECKS IF SOCKET IS VALID ** //
 void validateSocket(int sockfd) {
     if (sockfd < 0) {
         cerr << "ERROR on binding socket" << endl;
@@ -148,7 +150,7 @@ void validateSocket(int sockfd) {
     }
 }
 
-// ### Get a timestamp that's readable (taken from cplusplus.com)
+// ** Get a timestamp that's readable (taken from cplusplus.com) ** //
 string getReadableTime(){
     time_t t;
     struct tm* timeinfo;
@@ -161,10 +163,8 @@ string getReadableTime(){
     return string(timestamp);
 }
 
-// ### A function that removes the first word of the buffer and saves it as the firstWord string
+// ** A function that removes the first word of the buffer and saves it as the firstWord string ** //
 void manageBuffer(char* buffer, string &firstWord) {
-
-    // ### ATH SERVER CRASHAR EF BUFFER ER TÓMUR !!! ###
     string str = string(buffer);
     char delimit[] = ",";
     firstWord = strtok(buffer, delimit);
@@ -172,7 +172,7 @@ void manageBuffer(char* buffer, string &firstWord) {
     strcpy(buffer, str.c_str());
 }
 
-// ### TÓK ÞETTA HELD ÉG BEINT AF BEEJ - ÞYRFTI AÐ REFERENCE EÐA AÐLAGA ###
+// ######################## TÓK ÞETTA HELD ÉG BEINT AF BEEJ - ÞYRFTI AÐ REFERENCE EÐA AÐLAGA ###
 void openUDPPort(int &UDPsock) {
 
     struct addrinfo hints, *servinfo, *p;
@@ -187,7 +187,7 @@ void openUDPPort(int &UDPsock) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
     }
 
-    // loop through all the results and bind to the first we can
+    // ** LOOP THROUGH ALL THE RESULTS AND BIND TO THE FIRST WE CAN ** //
     for(p = servinfo; p != NULL; p = p->ai_next) {
         if ((UDPsock = socket(p->ai_family, p->ai_socktype,
                               p->ai_protocol)) == -1) {
@@ -211,8 +211,8 @@ void openUDPPort(int &UDPsock) {
     freeaddrinfo(servinfo);
 }
 
-// ## beej.us ##
-// get sockaddr, IPv4 or IPv6:
+// ** REFERENCE beej.us ** //
+// ** GET sockaddr, IPv4 OR IPv6 ** //
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -222,8 +222,10 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-string listServersReply(){
+// ** CONSTRUCTS THE LISTSERVER REPLY ** //
+string listServersReplyUDP() {
     string str;
+    stringstream ss;
     for(int i = 0 ; i < (int)clients.size() ; i++){
         ClientInfo* c = clients[i];
         if((!c->isOurClient)){
@@ -235,7 +237,7 @@ string listServersReply(){
     return str;
 }
 
-// ### CHECKS WHEETHER OR NOT WE ARE CONNECTED TO 5 SERVERS
+//  CHECKS WHETHER OR NOT WE ARE CONNECTED TO 5 SERVERS ** //
 bool isFull(){
     int counter = 0;
     for(int i = 0 ; i < (int)clients.size() ; i++){
@@ -251,8 +253,8 @@ bool isFull(){
     }
 }
 
-// ### A FUNCTION TO MAKE SURE WE ONLY SEND OUR SERVER LIST IN CASE OF 'LISTSERVERS' ###
-// ### REFERENCE: BEEJ GUIDE - MAY WANT TO REFACTOR
+// ** REFERENCE: BEEJ GUIDE ** //
+// ** A FUNCTION TO MAKE SURE WE ONLY SEND OUR SERVER LIST IN CASE OF 'LISTSERVERS' ** //
 void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
 
     string command;
@@ -263,7 +265,7 @@ void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
 
 }
 
-// ### LISTEN FOR 'LISTSERVERS' ON UDP PORT - SENDS A LIST OF OUR SERVERS IN RETURN
+// ** LISTENS FOR 'LISTSERVERS' ON UDP PORT - SENDS A LIST OF OUR SERVERS IN RETURN ** //
 void listenForUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen, char* UDPBuffer, string localIP) {
     cout << "Listening for UDP" << endl;
     int numbytes;
@@ -286,11 +288,11 @@ void listenForUDP(int &UDPsock, sockaddr_storage addr_udp, socklen_t udp_addrlen
 
 }
 
-// ### OPENS THE GIVEN TCP PORT ON THE GIVEN SOCKET
+// ** OPENS THE GIVEN TCP PORT ON THE GIVEN SOCKET ** //
 void openTCPPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
 
     cout << "Opening port: " << portno << endl;
-    // Allow reusage of address
+    // ** ALLOW REUSAGE OF ADDRESS ** //
     int reuse = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0){
         cerr << ("setsockopt(SO_REUSEADDR) failed") << endl;
@@ -301,7 +303,7 @@ void openTCPPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
-    // Attempt to bind the socket to the host (portno) the server is currently running on
+    // ** ATTEMPT TO BIND THE SOCKET TO THE HOST (portno) THE SERVER IS CURRENTLY RUNNING ON ** //
     if (::bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
         cerr << "Error on binding" << endl;
         exit(0);
@@ -309,14 +311,14 @@ void openTCPPort(struct sockaddr_in serv_addr, int sockfd, int portno) {
 }
 
 
-// ### DISCONNECTS THE SOCKET AND REMOVES THEM FROM THE VECTOR OF CLIENTS
+// ** DISCONNECTS THE SOCKET AND REMOVES CLIENT FROM THE VECTOR OF CLIENTS ** //
 void leave(ClientInfo* user, char* buffer){
     close(user->socketVal);
 
-    //check if the user had a username and create the appropriate string
+    // ** CHECK IF THE USER HAS A USERNAME AND CREATE THE APPROPRIATE STRING ** //
     bzero(buffer, strlen(buffer));
 
-    //find the user in the vector to remove him
+    // ** FIND THE USER IN THE VECTOR TO REMOVE HIM ** //
     for(int i = 0 ; i < (int)clients.size() ; i++){
         if(clients[i] == user){
             clients.erase(clients.begin() + i);
@@ -325,18 +327,16 @@ void leave(ClientInfo* user, char* buffer){
     }
 }
 
-//Function to check if the two token characters are in the beginning
-//and end of the buffer, returns a string with the buffer content
+// FUNCTION TO CHECK FOR AND REMOVE START AND END TOKENS ** //
 string checkTokens(char* buffer) {
     string str = string(buffer);
 
     str.erase(remove(str.begin(), str.end(), '\n'), str.end());
-    //checking for tokens at the beginning and at the end
+    // ** CHECKING FOR TOKENS AT BEGINNING AND END ** //
     if(str.find("\x1") == 0 && str.compare(str.size() - 1, 1, "\x4") == 0)
     {
-        //check if the end token also appears somewhere else in the message
-        //if the string has been bitstuffed we should find the end token duplicated
-        //then we have to delete the stuffed token
+        // ** CHECK IF THE END TOKEN ALSO APPEARS SOMEWHERE ELSE IN THE MESSAGE ** //
+        // ** IF THE STRING HAS BEEN BITSTUFFED WE SHOULD FIND THE END TOKEN DUPLICATED ** //
         int pos = 0;
         while(str.find("\x4\x4") < str.size())
         {
@@ -353,10 +353,10 @@ string checkTokens(char* buffer) {
     return str;
 }
 
-// ### PREPARES BUFFER TO CONNECT TO A NEW SOCKET
+// ** PREPARES BUFFER TO CONNECT TO A NEW SOCKET ** //
 void connectTo(char* buffer){
-    string address; ///uninitialized?
-    string tcpport; ///uninitialized?
+    string address;
+    string tcpport;
     struct sockaddr_in serv_addr;
 
     manageBuffer(buffer, address);
@@ -365,14 +365,14 @@ void connectTo(char* buffer){
     connectToServer(serv_addr, address, stoi(tcpport));
 }
 
-// ### CONSTRUCTS A ROUTING TABLE WITH SOME HORRIBLY UGLY AND INEFFICIENT CODE...
+// ** CONSTRUCTS A ROUTING TABLE WITH SOME HORRIBLY UGLY AND INEFFICIENT CODE ** //
 string LISTROUTES(){
-    ///I tried, I really tried with dijkstra's algorithm and shit but nothing worked... so, our LISTROUTES doesn't show more than 2 hops
+    // ** I tried, I really tried with dijkstra's algorithm but nothing worked... so, our LISTROUTES doesn't show more than 2 hops ** //
     string ourID = string(serverID);
     string table = ourID + ";";
     vector<ShortClientInfo*> c;
 
-    // add all 1-hop servers to the vector and say they connect through our server
+    // ** ADD ALL 1-HOP SERVERS TO THE VECTOR AND SAY THEY CONNECT WITH OUR SERVER ** //
     for(int i = 0 ; i < (int)clients.size() ; i++){
         if(clients[i]->hasUsername && !clients[i]->isOurClient){
             c.push_back(new ShortClientInfo(clients[i]->userName, ourID));
@@ -384,19 +384,19 @@ string LISTROUTES(){
 
         if(clients[i]->hasUsername && !clients[i]->isOurClient){
 
-            // go through the serverIDs we have recieved from each 1-hop connected
+            // ** GO THROUGH THE SERVERIDS WE HAVE RECEIVED FROM EACH 1-HOP CONNECTED SERVERS ** //
             for(int j = 0 ; j < (int)clients[i]->hasRouteTo.size() ; j++){
 
                 bool skip = false;
                 for(int k = 0 ; k < (int)c.size() ; k++){
-                    // check if this server is already in the vector or if it's only connection is to us.
+                    // CHECK IF THIS SERVER IS ALREADY IN THE VECTOR OR IF IT'S ONLY CONNECTION IS TO US ** //
                     if((c[k]->ID == clients[i]->hasRouteTo[j] && c[k]->through == ourID) || (clients[i]->hasRouteTo[j] == serverID)){
                         skip = true;
                         break;
                     }
                 }
                 if(skip == false){
-                    // if this server isn't in the vector and is connected to other servers, add it to the vector and through what server it is connected.
+                    // ** IF THIS SERVER ISN'T IN THE VECTOR AND IS CONNECTED TO OTHER SERVERS, WE ADD IT TO THE VECTOR AND THROUCH WHAT SERVER IT IS CONNECTED TO US ** //
                     c.push_back(new ShortClientInfo(clients[i]->hasRouteTo[j], clients[i]->userName));
                 }
             }
@@ -404,16 +404,16 @@ string LISTROUTES(){
     }
 
     for(int i = 0 ; i < (int)c.size() ; i++){
-        //read the vector to a string
+        // ** READ THE VECTOR TO A STRING ** //
         table += c[i]->ID + ":" + c[i]->through + ";";
     }
-    //add timestamp
+    // ** ADD TIMESTAMP ** //
     table += getReadableTime();
 
     return table;
 }
 
-// ### HANDLES A CMD COMMAND FROM OTHER SERVERS, MAINLY CONSTRUCTS RSP MESSAGES
+// ** HANDLES A CMD COMMAND FROM OTHER SERVERS, MAINLY CONSTRUCTS RSP MESSAGES ** //
 void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
 
     string ID;
@@ -493,7 +493,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
     }
-    // if the CMD is not for us. try to figure out where to send it.
+    // IF THE CMD IS NOT FOR US. TRY TO FIGURE OUT WHERE TO SEND IT ** //
     else if(fromServerID == serverID) {
         for(int i = 0 ; i < (int)clients.size() ; i++){
             if(toServerID == clients[i]->userName){
@@ -512,7 +512,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
     }
 }
 
-// ## HANDLES RESPONCES FROM OTHER SERVERS
+// ** HANDLES RESPONCES FROM OTHER SERVERS ** //
 void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, string toServerID, string fromServerID){
 
     string ID;
@@ -521,7 +521,6 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
     string hash;
     string remoteServerID = fromServerID;
     if (toServerID == serverID) {
-        // ### If another server sends RSP,V_GROUP_15,fromServerID,fromServerID, we sent LISTSERVERS to them to get their information ###
         if (srvcmd == "ID") {
 
             manageBuffer(buffer, ID);
@@ -537,11 +536,11 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             strcat(buffer, ",");
             strcat(buffer, "LISTSERVERS");
 
-            // save their serverID
+            // ** SAVE THEIR SERVERID ** //
             user->userName = fromServerID;
             user->hasUsername = true;
 
-            //save their IP and port number. If statement in case of the other server sending only their ID instead of ID,IP,port
+            // ** SAVE THEIR IP AND PORT NUMBER. IF STATEMENT IN CASE OF THE OTHER SERVER SENDING ONLY THEIR ID INSTEAD OF ID, IP, PORT ** //
             if(ID != IP){
                 user->peerName = IP;
 
@@ -550,7 +549,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
                 }
             }
 
-            //just to see what's going on serverside.
+            // ** JUST TO SEE WHAT'S GOING ON SERVERSIDE ** //
             cout << "Peer added to list of clients with username: " << fromServerID << endl;
             cout << "Connected users are now: " << endl;
             for (int i = 0; i < (int)clients.size(); i++) {
@@ -563,15 +562,15 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
 
-        // ### If another server sends RPS,V_GROUP_15,fromServerID,LISTSERVES,fromServerID,IP,port - We extract the information about them and add them to our client information.
+        // ** IF ANOTHER SERVER SENDS RSP,V_GROUP_15,fromServerID,LISTSERVERS,fromServerID,IP,port - WE EXTRACT THE INFORMATION ABOUT THEM AND ADD THEM TO OUR CLIENT INFORMATION ** //
         else if (srvcmd == "LISTSERVERS") {
             string serv;
             cout << "User sent their list of servers: " << buffer << endl;
 
-            // save the whole string
+            // ** SAVE THE WHOLE STRING ** //
             user->ListServers = string(buffer);
 
-            //but also, parse through it and add each ID to a vector of strings belonging to this server.
+            // ** BUT ALSO, PARSE THROUGH IT AND ADD EACH ID TO A VECTOR OF STRINGS BELONGIN TO THIS SERVER ** //
             stringstream ss(buffer);
             while(getline(ss, serv, ';')){
                 int pos = serv.find_first_of(",",0);
@@ -581,7 +580,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             }
         }
 
-        //save hashes we receive to a file
+        // ** SAVE HASHES WE RECEIVE TO A FILE ** //
         if (srvcmd == "FETCH") {
             manageBuffer(buffer, hash);
             ofstream hashFile;
@@ -592,7 +591,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
         }
     }
 
-    // ### If the RSP is not for us, we try to find who it is for and forward it
+    // ** IF THE RSP IS NOT FOR US, WE TRY TO FIND OUT WHO IT IS FOR AND FORWARD IT ** //
     else {
         for (int i = 0; i < (int)clients.size(); i++) {
             if (toServerID == clients[i]->userName) {
@@ -609,7 +608,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
     }
 }
 
-//### HANDLES THE CONNECT COMMAND FROM OUR CLIENT
+// ** HANDLES THE CONNECT COMMAND FROM OUR CLIENT ** //
 void CONNECT(char* buffer, ClientInfo* user){
     if(user->isOurClient){
         string username;
@@ -618,7 +617,7 @@ void CONNECT(char* buffer, ClientInfo* user){
         user->userName = username;
         user->hasUsername = true;
 
-        //send the user a confirmation that he is now connected to the server
+        // ** SEND THE USER A CONFIRMATION THAT HE IS NOW CONNECTED TO THE SERVER ** //
         strcpy(buffer, "You are now connected to the server as \"");
         strcat(buffer, &user->userName[0]);
         strcat(buffer, "\"");
@@ -628,7 +627,7 @@ void CONNECT(char* buffer, ClientInfo* user){
     }
 }
 
-// ### HANDLES THE ID COMMAND FROM OUR CLIENT
+// ** HANDLES THE ID COMMAND FROM OUR CLIENT ** //
 void ID(char* buffer, ClientInfo* user){
     bzero(buffer, strlen(buffer));
     strcpy(buffer, serverID);
@@ -637,10 +636,10 @@ void ID(char* buffer, ClientInfo* user){
     send(user->socketVal, buffer, strlen(buffer), 0);
 }
 
-// ### SIMILAR TO LISTSERVERS, BUT MORE READABLE FOR OUR CLIENT.
+// ** SIMILAR TO LISTSERVERS, BUT MORE READABLE FOR OUR CLIENT ** //
 void WHO(char* buffer, ClientInfo* user){
     bzero(buffer, strlen(buffer));
-    //add users who have a username (and are therefore connected) to the buffer
+    // ** ADD USERS WHO HAVE A USERNAME, AND THEREFOR CONNECTED TO THE BUFFER ** //
     string numberofservers = "There are " + to_string(clients.size() - 1) + " servers connected to our server;";
     strcpy(buffer, numberofservers.c_str());
 
@@ -714,7 +713,7 @@ void MSG(char* buffer, ClientInfo* user, string name){
 /// #############################################################################
 
 
-// ### DECIDES WHAT TO DO BASED ON THE COMMAND RECEIVED FROM THE CLIENT
+// ** DECIDES WHAT TO DO BASED ON THE COMMAND RECEIVED FROM THE CLIENT ** //
 void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string localIP) {
     string command;
     string name;
@@ -726,7 +725,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
     string udpport;
     string originalBuffer = string(buffer);
 
-    // get the command
+    // ** GET THE COMMAND ** //
     manageBuffer(buffer, command);
 
     if (command == "connectTo") {
@@ -771,17 +770,17 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         CONNECT(buffer, user);
     }
 
-    //send the current server id to the user
+    // ** SEND THE CURRENT SERVER ID TO THE USER ** //
     else if(command == "ID"){
         ID(buffer, user);
     }
 
-    //send the user a list of clients who are connected
+    // ** SEND THE USER A LIST OF CLIENTS WHO ARE CONNECTED ** //
     else if (command == "WHO" && user->hasUsername) {
         WHO(buffer, user);
     }
 
-    //remove the user from the server
+    // ** REMMOVE THE USER FROM THE SERVER ** //
     else if(command == "LEAVE"){
         if(user->hasUsername){
             name = user->userName;
@@ -792,15 +791,11 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         leave(user, buffer);
     }
 
-    //If you only knew the power of the client side
     else if(command == "V_GROUP_15_I_am_your_father"){
-        //No... no, that's not true... THAT'S IMPOSSIBLE!
-        //Search your feelings, you know it to be true!
         user->isOurClient = true;
-        //NOOOOOO!.. Nooo...
     }
 
-    //sends a message to a specific or all users
+    // ** SENDS A MESSAGE TO A SPECIFIC OR ALL USERS ** //
     else if(command == "MSG" && user->hasUsername) {
         MSG(buffer, user, name);
     }
