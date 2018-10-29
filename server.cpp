@@ -237,7 +237,6 @@ string listServersReplyUDP() {
     return str;
 }
 
-
 //  CHECKS WHETHER OR NOT WE ARE CONNECTED TO 5 SERVERS ** //
 bool isFull(){
     int counter = 0;
@@ -260,7 +259,7 @@ void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
 
     string command;
     manageBuffer(UDPBuffer, command);
-    string package = listServersReplyUDP();
+    string package = listServersReply();
     bzero(UDPBuffer, strlen(UDPBuffer));
     strcpy(UDPBuffer, package.c_str());
 
@@ -422,7 +421,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
     if(toServerID.empty() || toServerID == " " ||  toServerID == fromServerID || toServerID == serverID){
         if (srvcmd == "LISTSERVERS") {
             cout << "Other server requested a LISTSERVERS" << endl;
-            string package = listServersReply(localIP, toServerID, fromServerID);
+            string package = listServersReply();
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "RSP,");
             strcat(buffer, fromServerID.c_str());
