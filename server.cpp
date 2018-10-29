@@ -222,8 +222,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-/// AF HVERJU ERU 2 FÖLL SEM GERA ÞAÐ SAMA? ##############################
-string listServersReply(string localIP, string toServerID, string fromServerID){
+string listServersReply(){
     string str;
     for(int i = 0 ; i < (int)clients.size() ; i++){
         ClientInfo* c = clients[i];
@@ -235,22 +234,6 @@ string listServersReply(string localIP, string toServerID, string fromServerID){
     }
     return str;
 }
-
-string listServersReplyUDP() {
-    string str;
-    stringstream ss;
-    for(int i = 0 ; i < (int)clients.size() ; i++){
-        ClientInfo* c = clients[i];
-        if((!c->isOurClient)){
-            if(c->hasUsername){
-                str += c->userName + "," + c->peerName + "," + to_string(c->tcpPort) + ";";
-            }
-        }
-    }
-    return str;
-}
-/// ###################################################################
-
 
 // ### CHECKS WHEETHER OR NOT WE ARE CONNECTED TO 5 SERVERS
 bool isFull(){
@@ -274,7 +257,7 @@ void handleForeignLISTSERVERS(char* UDPBuffer, string localIP) {
 
     string command;
     manageBuffer(UDPBuffer, command);
-    string package = listServersReplyUDP();
+    string package = listServersReply();
     bzero(UDPBuffer, strlen(UDPBuffer));
     strcpy(UDPBuffer, package.c_str());
 
@@ -438,7 +421,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
     if(toServerID.empty() || toServerID == " " ||  toServerID == fromServerID || toServerID == serverID){
         if (srvcmd == "LISTSERVERS") {
             cout << "Other server requested a LISTSERVERS" << endl;
-            string package = listServersReply(localIP, toServerID, fromServerID);
+            string package = listServersReply();
             bzero(buffer, strlen(buffer));
             strcpy(buffer, "RSP,");
             strcat(buffer, fromServerID.c_str());
