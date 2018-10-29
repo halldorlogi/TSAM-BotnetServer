@@ -472,7 +472,11 @@ string LISTROUTES(){
 
 
 void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
-
+    cout << "CMD function:" << endl;
+    cout << "Buffer is now: " << buffer << endl;
+    cout << "srvcmd is now: " << srvcmd << endl;
+    cout << "toServerID is now: " << toServerID << endl;
+    cout << "fromServerID is now: " << fromServerID << endl;
     string ID;
     string hashNumber;
     if(toServerID.empty() || toServerID == " " ||  toServerID == fromServerID || toServerID == serverID){

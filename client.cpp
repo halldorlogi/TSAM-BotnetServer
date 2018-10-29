@@ -18,16 +18,11 @@ void error(const char *msg)
     exit(0);
 }
 
+// ** FUNTION FOR ADDING START AND END TOKENS TO BUFFER ** //
 string addTokens(char* buffer) {
-
-
-    char stuffedBuffer[1000];
-    int counter = 0;
     string tokenString = "";
 
     string str = string(buffer);
-    //str.insert(0,1,0x01);
-    //str.append(1,0x04);
     string start = "\x1";
     string end = "\x4";
 
@@ -43,19 +38,15 @@ string addTokens(char* buffer) {
     return tokenString;
 }
 
+// ** FUNCTION FOR REMOVING START AND END TOKENS FROM BUFFER ** //
 string checkTokens(char* buffer) {
     string str = string(buffer);
 
-     /*if(str[0] == char(1) && str[strlen(buffer)-1] == char(4)){
-        str = str.substr(1, str.size() - 2);
-    }*/
-
-    //checking for tokens at the beginning and at the end
+    // ** CHECKING FOR TOKENS AT THE BEGINNING AND AT THE END ** //
     if(str.find("\x1") == 0 && str.compare(str.size() - 1, 1, "\x4") == 0)
     {
-        //check if the end token also appears somewhere else in the message
-        //if the string has been bitstuffed we should find the end token duplicated
-        //then we have to delete the stuffed token
+        // ** CHECK IF THE END TOKEN ALSO APPEARS SOMEWHERE ELSE IN THE MESSAGE ** //
+        // ** IF THE STRING HAS BEEN BITSTUFFED WE SHOULD FIND THE END TOKEN DUPLICATED ** //
         int pos = 0;
         while(str.find("\x4\x4") < str.size())
         {
@@ -72,13 +63,12 @@ string checkTokens(char* buffer) {
     return str;
 }
 
-bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd, const char* addr){
+// ** CONNECTING TO PORT ** //
+bool connectToPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd, const char* addr){
 
     if (sockfd < 0) {
         cout << "Error opening socket" << endl;
     }
-
-    // ** APPLE COMPATIBILITY CODE ** //
 
     // ** SETTING UP SERVER ** //
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -93,7 +83,7 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
     char loginCommand[28];
     strcpy(loginCommand, "V_GROUP_15_I_am_your_father");
 
-    // Attempt a connection to the socket.
+    // ** ATTEMPT A CONNECTION TO THE SOCKET ** //
     int connection = connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
     if (connection == -1) {
         cout << "Port: " << portno << " CLOSED" << endl;
@@ -106,6 +96,7 @@ bool knockOnPort(sockaddr_in serv_addr, hostent* server, int portno, int sockfd,
     return true;
 }
 
+// ** FUNCTION THAT CHECKS IF INPUT IS VALID ** //
 bool validateCommand(string input){
     string str = input;
     string firstWord = strtok(&input[0], " ");
@@ -113,28 +104,21 @@ bool validateCommand(string input){
     if(firstWord == "CONNECT" || firstWord == "ID" || firstWord == "MSG" || firstWord == "WHO" || firstWord == "LEAVE"){
         return true;
     }
-    if(firstWord == "CHANGE"){
-        str = str.substr(str.find_first_of(" ")+1);
-        firstWord = strtok(&str[0], " ");
-        if(firstWord == "ID"){
-            return true;
-        }
-    }
     return false;
 }
 
 int main(int argc, char *argv[]) {
 
     // ** INITIALIZING VARIABLES **//
-    //int knock1, knock2,
     int sockfd, udpsockfd;
     string address;
-    struct sockaddr_in serv_addr;           // Socket address structure
+    // ** SOCKET ADDRESS STRUCTURE
+    struct sockaddr_in serv_addr;
     struct hostent *server;
     struct timeval time;
     string line;
-    char buffer[1000];
-    char udpbuffer[1000];
+    char buffer[strlen(buffer)];
+    char udpbuffer[strlen(udpbuffer)];
     int set = 1;
 
     fd_set masterFD, readFD;
@@ -150,24 +134,29 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0); // Open Socket
+    // ** OPENING SOCKET ** //
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
     udpsockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
 
 
-    if(knockOnPort(serv_addr, server, atoi(argv[2]), sockfd, addr)){
-
-        //cout << sockfd << endl;
+    if(connectToPort(serv_addr, server, atoi(argv[2]), sockfd, addr)){
 
         cout << "Here is a list of available commands" << endl << endl;
         cout << "ID                   ::      Set ID of server" << endl;
-        cout << "CONNECT <USERNAME>   ::      Connect to the server" << endl;
+        cout << "CONNECT,<USERNAME>   ::      Connect to the server" << endl;
         cout << "LEAVE                ::      Disconnect from server" << endl;
         cout << "WHO                  ::      List users on server" << endl;
-        cout << "MSG <USERNAME>       ::      Send private message" << endl;
-        cout << "MSG ALL              ::      Send message to everyone" << endl;
-        cout << "CHANGE ID            ::      Change ID of server" << endl;
-        cout << endl;
+        cout << "MSG,<USERNAME>       ::      Send private message" << endl;
+        cout << "MSG,ALL              ::      Send message to everyone" << endl << endl;
+
+        cout << "Commands available after you connect to the server" << endl << endl;
+        cout << "LISTSERVERS                                         ::      Provides a list of directly connected servers" << endl;
+        cout << "LISTROUTES                                          ::      Provides a list of all servers in your network" << endl;
+        cout << "FETCH,<no.>                                         ::      Fetches a hashed string from this server with supplied index" << endl << endl;
+        cout << "CMD,<TOSERVERID>,<FROMSERVERID>,<command>           ::      Send a command to another server" << endl;
+        cout << "RSP,<TOSERVERID>,<FROMSERVERID>,<command response>  ::      Reply to a CMD from another server" << endl;
+
 
         string input;
         do{
