@@ -20,7 +20,7 @@
 #include <sstream>
 
 #define MAX_TIME_INTERVAL 300
-#define serverID "V_GROUP_15"
+#define serverID "V_GROUP_15_2"
 
 using namespace std;
 
@@ -69,7 +69,7 @@ vector<ClientInfo*> clients;
 int TCPport, UDPport;
 const char* cTCP;
 const char* cUDP;
-string localIP = "130.208.243.61";
+string localIP = "130.208.224.226";
 
 /*int manageShort(string ID){
     for(int i = 0 ; i < (int)shortClients.size() ; i++){
@@ -77,7 +77,7 @@ string localIP = "130.208.243.61";
             return i;
         }
     }
-    shortClients.push_back(new ShortClientInfo(ID));
+    shortClients.push_back(new ShortClientInfo());
     return shortClients.size() -1;
 }*/
 
@@ -115,11 +115,10 @@ string addTokens(char* buffer) {
 int stillAliveTime = getTime();
 
 // ### CONNECT TO OTHER SERVER AND ADD THE SERVER INFORMATION TO CLIENTS ###
-void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno) {
-
+void connectToServer(struct sockaddr_in serv_addr, string address, string tcpportno) {
+    
     int externalSock = socket(AF_INET, SOCK_STREAM, 0);
     struct hostent *server = gethostbyname(address.c_str());
-
     char message[1000];
 
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -128,11 +127,12 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
     bcopy((char *) server->h_addr,
           (char *) &serv_addr.sin_addr.s_addr,
           server->h_length);
-
-    serv_addr.sin_port = htons(tcpportno);
+    
+    serv_addr.sin_port = htons(stoi(tcpportno));
     if(connect(externalSock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) >= 0){
         cout << "Connection to " << server->h_name << " successful" << endl;
-        strcpy(message, "CMD,,V_GROUP_15,ID");
+    
+        strcpy(message, "CMD,,V_GROUP_15_2,ID");
         string str = addTokens(message);
         strcpy(message, str.c_str());
         cout << "sending: " << message << endl;
@@ -140,7 +140,7 @@ void connectToServer(struct sockaddr_in serv_addr, string address, int tcpportno
         //cout << "serv_addr is now: " << inet_ntop(AF_INET, &(serv_addr.sin_addr), message, 1000) << endl;
         int time = getTime();
         clients.push_back(new ClientInfo(externalSock, server->h_name, time));
-        clients[clients.size() - 1]->tcpPort = tcpportno;
+        clients[clients.size() - 1]->tcpPort = stoi(tcpportno);
     }
 }
 
@@ -428,7 +428,7 @@ void connectTo(char* buffer){
     manageBuffer(buffer, address);
     manageBuffer(buffer, tcpport);
     bzero((char*)&serv_addr, sizeof(serv_addr));
-    connectToServer(serv_addr, address, stoi(tcpport));
+    connectToServer(serv_addr, address, tcpport);
 }
 
 string LISTROUTES(){
@@ -491,7 +491,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             strcpy(buffer, str.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
-        if (srvcmd == "ID}") {
+        if (srvcmd == "ID") {
 
             cout << fromServerID << " has requested to connect" << endl;
             bzero(buffer, strlen(buffer));
@@ -501,7 +501,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             strcat(buffer, serverID);
             strcat(buffer, ",ID,");
             strcat(buffer, serverID);
-            strcat(buffer, ",130.208.243.61,");
+            strcat(buffer, ",130.208.224.226,");
             strcat(buffer, cTCP);
             cout << "sending: "<< buffer << endl;
             string str = addTokens(buffer);
@@ -641,10 +641,8 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
 
         if (srvcmd == "FETCH") {
             manageBuffer(buffer, hash);
-            ofstream hashFile;
-            hashFile.open("hashes.txt");
-            hashFile << buffer;
-            hashFile.close();
+            fstream hashFile("hashes.txt", hashFile.out | hashFile.app);
+            hashFile << buffer << endl;
             cout << "The hash is: " << buffer << endl;
         }
     }
@@ -1007,7 +1005,7 @@ int main(int argc, char* argv[]) {
                 //cout << "port is " << htons(cli_addr.sin_port) << endl;
 
                 cout << "Sending message to other server: ";
-                strcpy(message, "CMD,,V_GROUP_15,ID");
+                strcpy(message, "CMD,,V_GROUP_15_2,ID");
                 //cout << message << endl;
                 string str = addTokens(message);
                 strcpy(message, str.c_str());
