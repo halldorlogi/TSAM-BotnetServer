@@ -117,8 +117,7 @@ int main(int argc, char *argv[]) {
     struct hostent *server;
     struct timeval time;
     string line;
-    char buffer[strlen(buffer)];
-    char udpbuffer[strlen(udpbuffer)];
+    char buffer[1000];
     int set = 1;
 
     fd_set masterFD, readFD;

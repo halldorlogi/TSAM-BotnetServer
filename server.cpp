@@ -223,7 +223,7 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 // ** CONSTRUCTS THE LISTSERVER REPLY ** //
-string listServersReplyUDP() {
+string listServersReply() {
     string str;
     stringstream ss;
     for(int i = 0 ; i < (int)clients.size() ; i++){
@@ -434,7 +434,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             strcpy(buffer, str.c_str());
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
-        if (srvcmd == "ID}") {
+        if (srvcmd == "ID") {
 
             cout << fromServerID << " has requested to connect" << endl;
             bzero(buffer, strlen(buffer));
