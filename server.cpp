@@ -389,25 +389,31 @@ string LISTROUTES(){
     string table = ourID + ";";
     vector<ShortClientInfo*> c;
 
+    // add all 1-hop servers to the vector and say they connect through our server
     for(int i = 0 ; i < (int)clients.size() ; i++){
         if(clients[i]->hasUsername && !clients[i]->isOurClient){
             c.push_back(new ShortClientInfo(clients[i]->userName, ourID));
         }
     }
+
+
     for(int i = 0 ; i < (int)clients.size() ; i++){
 
         if(clients[i]->hasUsername && !clients[i]->isOurClient){
 
+            // go through the serverIDs we have recieved from each 1-hop connected
             for(int j = 0 ; j < (int)clients[i]->hasRouteTo.size() ; j++){
 
                 bool skip = false;
                 for(int k = 0 ; k < (int)c.size() ; k++){
+                    // check if this server is already in the vector or if it's only connection is to us.
                     if((c[k]->ID == clients[i]->hasRouteTo[j] && c[k]->through == ourID) || (clients[i]->hasRouteTo[j] == serverID)){
                         skip = true;
                         break;
                     }
                 }
                 if(skip == false){
+                    // if this server isn't in the vector and is connected to other servers, add it to the vector and through what server it is connected.
                     c.push_back(new ShortClientInfo(clients[i]->hasRouteTo[j], clients[i]->userName));
                 }
             }
@@ -415,14 +421,16 @@ string LISTROUTES(){
     }
 
     for(int i = 0 ; i < (int)c.size() ; i++){
+        //read the vector to a string
         table += c[i]->ID + ":" + c[i]->through + ";";
     }
+    //add timestamp
     table += getReadableTime();
 
     return table;
 }
 
-// ### HANDLES A CMD COMMAND FROM OTHER SERVERS
+// ### HANDLES A CMD COMMAND FROM OTHER SERVERS, MAINLY CONSTRUCTS RSP MESSAGES
 void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, string toServerID, string fromServerID, string localIP){
 
     string ID;
@@ -502,7 +510,7 @@ void CMD(string originalBuffer, char* buffer, ClientInfo* &user, string srvcmd, 
             send(user->socketVal, buffer, strlen(buffer), 0);
         }
     }
-
+    // if the CMD is not for us. try to figure out where to send it.
     else if(fromServerID == serverID) {
         for(int i = 0 ; i < (int)clients.size() ; i++){
             if(toServerID == clients[i]->userName){
@@ -546,8 +554,11 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             strcat(buffer, ",");
             strcat(buffer, "LISTSERVERS");
 
+            // save their serverID
             user->userName = fromServerID;
             user->hasUsername = true;
+
+            //save their IP and port number. If statement in case of the other server sending only their ID instead of ID,IP,port
             if(ID != IP){
                 user->peerName = IP;
 
@@ -556,11 +567,13 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
                 }
             }
 
+            //just to see what's going on serverside.
             cout << "Peer added to list of clients with username: " << fromServerID << endl;
             cout << "Connected users are now: " << endl;
             for (int i = 0; i < (int)clients.size(); i++) {
                 cout << clients[i]->userName << endl;
             }
+
             string str = addTokens(buffer);
             strcpy(buffer, str.c_str());
             cout << "sending: " << buffer << endl;
@@ -571,8 +584,11 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
         else if (srvcmd == "LISTSERVERS") {
             string serv;
             cout << "User sent their list of servers: " << buffer << endl;
+
+            // save the whole string
             user->ListServers = string(buffer);
 
+            //but also, parse through it and add each ID to a vector of strings belonging to this server.
             stringstream ss(buffer);
             while(getline(ss, serv, ';')){
                 int pos = serv.find_first_of(",",0);
@@ -582,6 +598,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             }
         }
 
+        //save hashes we receive to a file
         if (srvcmd == "FETCH") {
             manageBuffer(buffer, hash);
             ofstream hashFile;
@@ -591,17 +608,7 @@ void RSP(string originalBuffer, char* buffer, ClientInfo* user, string srvcmd, s
             cout << "The hash is: " << buffer << endl;
         }
     }
-    else if(fromServerID == serverID){
-        for(int i = 0 ; i < (int)clients.size() ; i++){
-            if(toServerID == clients[i]->userName){
-                strcpy(buffer, originalBuffer.c_str());
-                string str = addTokens(buffer);
-                strcpy(buffer, str.c_str());
-                cout << "sending: " << buffer << endl;
-                send(clients[i]->socketVal, buffer, strlen(buffer), 0);
-            }
-        }
-    }
+
     // ### If the RSP is not for us, we try to find who it is for and forward it
     else {
         for (int i = 0; i < (int)clients.size(); i++) {
@@ -651,7 +658,7 @@ void ID(char* buffer, ClientInfo* user){
 void WHO(char* buffer, ClientInfo* user){
     bzero(buffer, strlen(buffer));
     //add users who have a username (and are therefore connected) to the buffer
-    string numberofservers = "There are " + to_string(clients.size() - 1) + "servers connected to our server;";
+    string numberofservers = "There are " + to_string(clients.size() - 1) + " servers connected to our server;";
     strcpy(buffer, numberofservers.c_str());
 
     for (int i = 0; i < (int)clients.size(); i++) {
@@ -791,8 +798,7 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         WHO(buffer, user);
     }
 
-    //remove the user from the server and alert others that that user has left (if that user had a username).
-    //a user who hasn't used the CONNECT command can still use the LEAVE command
+    //remove the user from the server
     else if(command == "LEAVE"){
         if(user->hasUsername){
             name = user->userName;
@@ -803,8 +809,12 @@ void handleConnection(char* buffer, int messageCheck, ClientInfo* user, string l
         leave(user, buffer);
     }
 
+    //If you only knew the power of the client side
     else if(command == "V_GROUP_15_I_am_your_father"){
+        //No... no, that's not true... THAT'S IMPOSSIBLE!
+        //Search your feelings, you know it to be true!
         user->isOurClient = true;
+        //NOOOOOO!.. Nooo...
     }
 
     //sends a message to a specific or all users
